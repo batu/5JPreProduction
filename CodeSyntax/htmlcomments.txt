@@ -1,0 +1,12 @@
+
+    <!-- YAML parser. --> 
+    <script src="lib/yaml.js"></script>
+
+    <!-- D3. -->
+    <script src="https://d3js.org/d3.v5.min.js"></script>
+
+    <!-- Code Mirror. -->
+    <script src="lib/codemirror.js"></script>
+    <link rel="stylesheet" href="lib/codemirror.css">
+    <link rel="stylesheet" href="theme/monokai.css">
+    <script src="mode/yaml/yaml.js"></script>

@@ -1,5 +1,4 @@
 // Code mirror part
-
 var placeHolderText = "circle: 5";
 
 if (localStorage['text'] !== undefined){
