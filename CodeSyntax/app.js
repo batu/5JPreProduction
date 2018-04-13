@@ -1,3 +1,5 @@
+//var Esprima = require("esprima")
+
 // Code mirror part
 var placeHolderText = "circle: 5";
 
