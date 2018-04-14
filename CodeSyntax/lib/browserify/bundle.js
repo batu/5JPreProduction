@@ -45,6 +45,13 @@ function evaluateYAMLtoD3(){
 	}
 }
 
+
+function evaluateASTtoD3(){
+	code_text = myCodeMirror.getValue();
+	var ast = Esprima.parse(code_text);
+	console.log(ast);
+}
+
 // D3 Part
 var vis = d3.select("#graph")
 .append("svg")
@@ -62,7 +69,7 @@ function d3Draw(nodes){
 	.attr("fill", "black");
 }
 
-evaluateYAMLtoD3();
+evaluateASTtoD3();
 
 
 
