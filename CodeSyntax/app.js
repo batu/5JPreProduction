@@ -1,3 +1,5 @@
+var Esprima = require("esprima")
+
 // Code mirror part
 var placeHolderText = "circle: 5";
 
@@ -13,7 +15,8 @@ var myCodeMirror = CodeMirror(document.getElementById("codeeditor"), {
 
 myCodeMirror.on("change", function(){
 	localStorage['text'] = myCodeMirror.getValue();
-	evaluateYAMLtoD3();
+	//evaluateYAMLtoD3();
+	evaluateASTtoD3();
 });
 
 function evaluateYAMLtoD3(){
@@ -42,23 +45,93 @@ function evaluateYAMLtoD3(){
 	}
 }
 
-// D3 Part
-var vis = d3.select("#graph")
-.append("svg")
-.attr("width", 2000).attr("height", 200);
 
-function d3Draw(nodes){
-	vis.selectAll("*").remove();
-	vis.selectAll("circle.nodes")
-	.data(nodes)
-	.enter()
-	.append("svg:circle")
-	.attr("cx", function(d) { return d.x; })
-	.attr("cy", function(d) { return d.y; })
-	.attr("r", "10px")
-	.attr("fill", "black");
+function evaluateASTtoD3(){
+	console.log("Yeah")
+	code_text = myCodeMirror.getValue();
+	var ast = Esprima.parse(code_text);
+	
+	// COPYING CODE FROM https://javascriptstore.com/2017/10/15/visualize-ast-javascript/
+	// declares a tree layout and assigns the size
+	var margin = {top: 20, right: 45, bottom: 25, left: 45},
+            width = 330 - margin.left - margin.right,
+            height = 250 - margin.top - margin.bottom;
+	
+
+	var treemap = d3.tree()
+	   .size([width, height]);
+
+	// assigns the data to a hierarchy using parent-child relationships
+	var nodes = d3.hierarchy(ast);
+
+	// maps the node data to the tree layout
+	nodes = treemap(nodes);
+
+	var svg = d3.select("#graph").append("svg")
+                .attr("width", width + margin.left + margin.right)
+                .attr("height", height + margin.top + margin.bottom),
+	 g = svg.append("g")
+            .attr("transform",
+                  "translate(" + margin.left + "," + margin.top + ")");
+
+	var link = svg.selectAll(".link")
+	.data(nodes.descendants().slice(1))
+	.enter().append("path")
+	.attr("class", "link")
+	.attr("d", function (d) {
+		  return "M" + d.x + "," + d.y
+		  + "C" + d.x + "," + (d.y + d.parent.y) / 2
+		  + " " + d.parent.x + "," + (d.y + d.parent.y) / 2
+		  + " " + d.parent.x + "," + d.parent.y;
+	});
+
+
+	var node = g.selectAll(".node")
+			.data(nodes.descendants())
+			.enter().append("g")
+			.attr("class", function (d) {
+				return "node" +
+					(d.children ? " node--internal" : " node--leaf");
+			})
+			.attr("transform", function (d) {
+				return "translate(" + d.x + "," + d.y + ")";
+			});
+
+	node.append("circle")
+		.attr("r", 10);
+
+	node.append("text")
+	.attr({
+	   "dy": ".35em",
+	   "y": function (d) {
+				return d.children ? -20 : 20;
+		}})
+		.text(function (d) {
+		   return d.data.type;
+		});
 }
 
-evaluateYAMLtoD3();
 
+// D3 Part
 
+function circles(){
+	var vis = d3.select("#graph")
+	.append("svg")
+	.attr("width", 2000).attr("height", 200);
+
+	function d3Draw(nodes){
+		vis.selectAll("*").remove();
+		vis.selectAll("circle.nodes")
+		.data(nodes)
+		.enter()
+		.append("svg:circle")
+		.attr("cx", function(d) { return d.x; })
+		.attr("cy", function(d) { return d.y; })
+		.attr("r", "10px")
+		.attr("fill", "black");
+	}
+
+	evaluateASTtoD3();
+}
+
+//evaluateYAMLtoD3();

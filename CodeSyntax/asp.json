@@ -1,0 +1,129 @@
+//After Render
+{
+	"children": [],
+	"data": 
+	{
+		"children": [{
+			"children":[],
+			"expression":{
+				"type": "BinaryExpression",
+				"operator": "+",
+				"left":{
+					"type": "Literal",
+					"value": 1
+					},
+				"right":{
+					"type": "Literal",
+					"value": 1
+					}
+				},
+			"type": "ExpressionStatement"
+			}],
+		"sourceType": "script",
+		"type": "Program"
+	}
+}
+
+//Before Render
+{
+	"body":[
+		{
+			"type":"ExpressionStatement",
+			"expression": {
+				"type" :"BinaryExpression",
+				""
+			}
+		}
+	],
+	"sourceType":"script",
+	"type": "Program"
+}
+
+
+
+interface BinaryExpression {
+    type: 'BinaryExpression';
+    operator: 'instanceof' | 'in' | '+' | '-' | '*' | '/' | '%' | '**' |
+        '|' | '^' | '&' | '==' | '!=' | '===' | '!==' |
+        '<' | '>' | '<=' | '<<' | '>>' | '>>>';
+    left: Expression;
+    right: Expression;
+}
+
+AssignmentExpression {
+    type: 'AssignmentExpression';
+    operator: '=' | '*=' | '**=' | '/=' | '%=' | '+=' | '-=' |
+        '<<=' | '>>=' | '>>>=' | '&=' | '^=' | '|=';
+    left: Expression;
+    right: Expression;
+}
+
+Literal {
+    type: 'Literal';
+    value: boolean | number | string | RegExp | null;
+    raw: string;
+    regex?: { pattern: string, flags: string };
+}
+
+ FunctionExpression {
+    type: 'FunctionExpression';
+    id: Identifier | null;
+    params: FunctionParameter[];
+    body: BlockStatement;
+    generator: boolean;
+    async: boolean;
+    expression: boolean;
+}
+
+CallExpression {
+    type: 'CallExpression';
+    callee: Expression;
+    arguments: ArgumentListElement[];
+}
+
+UpdateExpression {
+    type: 'UpdateExpression';
+    operator: '++' | '--';
+    argument: Expression;
+    prefix: boolean;
+}
+
+LogicalExpression {
+    type: 'LogicalExpression';
+    operator: '||' | '&&';
+    left: Expression;
+    right: Expression;
+}
+
+ ConditionalExpression {
+    type: 'ConditionalExpression';
+    test: Expression;
+    consequent: Statement;
+    alternate?: Statement;
+}
+
+***
+ForStatement {
+    type: 'ForStatement';
+    init: Expression | VariableDeclaration | null;
+    test: Expression | null;
+    update: Expression | null;
+    body: Statement;
+}
+
+FunctionDeclaration {
+    type: 'FunctionDeclaration';
+    id: Identifier | null;
+    params: FunctionParameter[];
+    body: BlockStatement;
+    generator: boolean;
+    async: boolean;
+    expression: false;
+}
+
+IfStatement {
+    type: 'IfStatement';
+    test: Expression;
+    consequent: Statement;
+    alternate?: Statement;
+}

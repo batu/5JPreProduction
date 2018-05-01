@@ -7,13 +7,20 @@
     <script src="lib/yaml/yaml.js"></script>
 
     <!-- D3. -->
-    <script src="https://d3js.org/d3.v5.min.js"></script>
+    <script src="https://d3js.org/d3.v5.js"></script>
 
     <!-- Code Mirror. -->
     <script src="lib/codemirror/codemirror.js"></script>
     <link rel="stylesheet" href="lib/codemirror.css">
     <link rel="stylesheet" href="theme/monokai.css">
     <script src="mode/yaml/yaml.js"></script>
+
+    <!-- AST Traverse. -->
+    <script src="lib/traverse/ast-traverse.js"></script>
+
+
+    <!-- For all the NPM Modules Using Browserify. -->
+    <script src="lib/browserify/bundle.js"></script>
   
     <!-- CSS -->
     <link rel="stylesheet" href="stylesheet.css">
@@ -25,6 +32,6 @@
     <div id="graph"></div>
 
 
-    <script src="app.js"></script>
+    <script src="bundle.js"></script>
   </body>
 </html>
