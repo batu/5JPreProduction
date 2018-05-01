@@ -2,7 +2,24 @@
 var Esprima = require("esprima")
 
 // Code mirror part
-var placeHolderText = "circle: 5";
+var placeHolderText = "5 * 5 + 10 / 2 \
+var x = 5";
+
+var parentElement = parentElement = document.getElementById('drawArea');
+var dimensions = [parentElement.clientWidth, parentElement.clientHeight];
+
+var paper = Raphael(parentElement);
+// AST options
+var box = [150, 60, 20]; // [w, h, border-radius]
+var fill = '#3AA';
+var stroke = '#FFF';
+var text = '#FFF';
+var line = '#CCC';
+var margin = 30;
+var fontSize = 12;
+var nodeFont = { 'font-size': fontSize,
+								 'font-family': 'Arial, Helvetica, sans-serif',
+								 'fill': text };
 
 if (localStorage['text'] !== undefined){
 	placeHolderText = localStorage['text'];
@@ -13,6 +30,8 @@ var myCodeMirror = CodeMirror(document.getElementById("codeeditor"), {
 	theme: "monokai",
 	lineNumbers: true,
 });
+
+evaluateASTtoD3();
 
 myCodeMirror.on("change", function(){
 	localStorage['text'] = myCodeMirror.getValue();
@@ -48,103 +67,217 @@ function evaluateYAMLtoD3(){
 
 
 function evaluateASTtoD3(){
+
 	//console.log("In evaluateASTtoD3")
 	code_text = myCodeMirror.getValue();
-	var ast = Esprima.parse(code_text);
-
-	console.log(ast)
-	//Figure out what traverse does. 
-	traverse(ast, {
-	    pre: function (node) {
-	        if (node.body && !Array.isArray(node.body)) {
-	            node.body = [node.body];
-	        }
-	        node.children = node.body ? node.body : [];
-	    } 
-	});  
+	var ast;
+	var parseError;
+	try {
+		ast = Esprima.parse(code_text);
+	} catch (e) {
+		parseError = true;
+		ast = {'errorMessage': e.message, 'errorObject': e};
+	}
 
 	// https://javascriptstore.com/2017/10/15/visualize-ast-javascript/
 	// declares a tree layout and assigns the size
-	renderTree(ast) 
+	console.log(ast)
+	if (! parseError) {
+		// Redraw the AST
+		paper.clear();
+		drawAST(ast);
+	}
+
+}
+
+function drawAST(ast) {
+	function writeNodeInfo(x, y, node) {
+		var text = '';
+		switch (node.type) {
+			case 'CallExpression':
+				text = node.callee.name;
+				break;
+			case 'VariableDeclarator':
+				text = node.id.name;
+				break;
+			case 'Literal':
+				text = node["value"];
+				break;
+			default:
+				for (var prop in node) {
+					if (node.hasOwnProperty(prop) && prop != 'type' &&
+							typeof node[prop] != 'object') {
+						text += prop + ': ' + node[prop] + '\n';
+					}
+				}
+				break;
+		}
+		if (text != '') {
+			paper.text(x, y, text).attr(nodeFont);
+		}
+	}
+
+	function drawNode(xy, node, parentLineConnectXY) {
+		// Draw the node
+		var rect = paper.rect(xy[0], xy[1], box[0], box[1], box[2]);
+		rect.attr({'stroke': stroke, 'fill': fill});
+		// Draw the line connecting this node to the parent
+		if (parentLineConnectXY) {
+			// Copy parentLineConnectXY
+			var p = [parentLineConnectXY[0], parentLineConnectXY[1]];
+			p[0] -= (box[0]) / 2;
+			p[1] += box[1];
+			var d = [xy[0], xy[1]];
+			d[0] += (box[0]) / 2;
+			d[1] += 0;
+			var pathString = 'M' + p.join(' ') + ' L' + d.join(' ') + 'Z';
+			paper.path(pathString).attr('stroke', line).attr('stroke-width', '1');
+		}
+		var boxY = xy[1] + fontSize;
+		var text = paper.text(xy[0] + box[0] / 2, boxY, node.type);
+		text.attr(nodeFont).attr({'font-size': fontSize + 2});
+
+		// Write out some properties
+		writeNodeInfo(xy[0] + box[0] / 2, boxY + fontSize + box[1]/4, node);
+	}
+
+	function enumerateChildren(xy, ast, parentLineConnectXY) {
+		// Draw this node
+		drawNode(xy, ast, parentLineConnectXY);
+		xy[0] += box[0] + margin;
+
+		// Find children of this node
+		var children = [];
+		// The order of these matters
+		// eg in a while statement the test must come before the body
+		var possibleChildProperties = ['test',
+																	 'body',
+																	 'consequent',
+																	 'alternate',
+																	 'init',
+																	 'declarations',
+																	 'left',
+																	 'right',
+																	 'expression',
+																	 'argument',
+																	 'arguments'];
+		for (var i = 0; i < possibleChildProperties.length; i++) {
+			if (ast.hasOwnProperty(possibleChildProperties[i]) &&
+					ast[possibleChildProperties[i]] !== null) {
+				children = children.concat(ast[possibleChildProperties[i]]);
+			}
+		}
+
+		if (children.length > 0) {
+
+			// Copy XY by value to store parent coords for connecting lines
+			parentLineConnectXY = [xy[0] - margin, xy[1]];
+
+			// New line for children
+			xy[1] += box[1] + margin;
+			xy[0] -= box[0] + margin;
+			// Work out where the first child X needs to be
+			// based on the number of children and box width
+			if (children.length > 1) {
+				// Add half a box
+				xy[0] += box[0] / 2;
+				// Add half a margin
+				xy[0] += margin / 2;
+				// Take away half children * (box widths+margin)
+				xy[0] -= children.length / 2 * (box[0] + margin);
+			}
+
+			for (var i = 0; i < children.length; i++) {
+				enumerateChildren(xy, children[i], parentLineConnectXY);
+			}
+		}
+	}
+	// Send the root node in for enumeration
+	enumerateChildren([(dimensions[0] / 2) - (box[0] / 2), margin], ast);
 }
 
 
+function createRenderTree(esprimaAST){
+	if (current["type"] == "BinaryExpression"){
+			var operator = current["operator"];
+	}
+	return esprimaAST
+}
+
  function renderTree(ast) {
+
  		container = "#graph"
 
  		// Remove old SVG
  		d3.select(container)
  			.select("svg")
  			.remove()
+    var treeData = ast;
 
+    var scale = 1.5;
+    // set the dimensions and margins of the diagram
+    var margin = {top: 40 / scale, right: 90/ scale, bottom: 50/ scale, left: 90/ scale},
+        width = 660 / scale - margin.left - margin.right,
+        height = 500 / scale - margin.top - margin.bottom;
 
- 		console.log(svg)
-        var treeData = ast;
+    // declares a tree layout and assigns the size
+    var treemap = d3.tree()
+        .size([width, height]);
 
-        var scale = 1.5;
-        // set the dimensions and margins of the diagram
-        var margin = {top: 40 / scale, right: 90/ scale, bottom: 50/ scale, left: 90/ scale},
-            width = 660 / scale - margin.left - margin.right,
-            height = 500 / scale - margin.top - margin.bottom;
+    //  assigns the data to a hierarchy using parent-child relationships
+    var nodes = d3.hierarchy(treeData);
 
-        // declares a tree layout and assigns the size
-        var treemap = d3.tree()
-            .size([width, height]);
+    // maps the node data to the tree layout
+    nodes = treemap(nodes);
 
-        //  assigns the data to a hierarchy using parent-child relationships
-        var nodes = d3.hierarchy(treeData);
+    // append the svg obgect to the body of the page
+    // appends a 'group' element to 'svg'
+    // moves the 'group' element to the top left margin
+    var svg = d3.select(container).append("svg")
+            .attr("width", width + margin.left + margin.right)
+            .attr("height", height + margin.top + margin.bottom),
+        g = svg.append("g")
+            .attr("transform",
+                "translate(" + margin.left + "," + margin.top + ")");
 
-        // maps the node data to the tree layout
-        nodes = treemap(nodes);
+    // adds the links between the nodes
+    var link = g.selectAll(".link")
+        .data(nodes.descendants().slice(1))
+        .enter().append("path")
+        .attr("class", "link")
+        .attr("d", function (d) {
+            return "M" + d.x + "," + d.y
+                + "C" + d.x + "," + (d.y + d.parent.y) / 2
+                + " " + d.parent.x + "," + (d.y + d.parent.y) / 2
+                + " " + d.parent.x + "," + d.parent.y;
+        });
 
-        // append the svg obgect to the body of the page
-        // appends a 'group' element to 'svg'
-        // moves the 'group' element to the top left margin
-        var svg = d3.select(container).append("svg")
-                .attr("width", width + margin.left + margin.right)
-                .attr("height", height + margin.top + margin.bottom),
-            g = svg.append("g")
-                .attr("transform",
-                    "translate(" + margin.left + "," + margin.top + ")");
+    // adds each node as a group
+    var node = g.selectAll(".node")
+        .data(nodes.descendants())
+        .enter().append("g")
+        .attr("class", function (d) {
+            return "node" +
+                (d.children ? " node--internal" : " node--leaf");
+        })
+        .attr("transform", function (d) {
+            return "translate(" + d.x + "," + d.y + ")";
+        });
 
-        // adds the links between the nodes
-        var link = g.selectAll(".link")
-            .data(nodes.descendants().slice(1))
-            .enter().append("path")
-            .attr("class", "link")
-            .attr("d", function (d) {
-                return "M" + d.x + "," + d.y
-                    + "C" + d.x + "," + (d.y + d.parent.y) / 2
-                    + " " + d.parent.x + "," + (d.y + d.parent.y) / 2
-                    + " " + d.parent.x + "," + d.parent.y;
-            });
+    // adds the circle to the node
+    node.append("circle")
+        .attr("r", 10);
 
-        // adds each node as a group
-        var node = g.selectAll(".node")
-            .data(nodes.descendants())
-            .enter().append("g")
-            .attr("class", function (d) {
-                return "node" +
-                    (d.children ? " node--internal" : " node--leaf");
-            })
-            .attr("transform", function (d) {
-                return "translate(" + d.x + "," + d.y + ")";
-            });
-
-        // adds the circle to the node
-        node.append("circle")
-            .attr("r", 10);
-
-        // adds the text to the node
-        node.append("text")
-            .attr("dy", ".35em")
-            .attr("y", function (d) {
-                return d.children ? -20 : 20;
-            })
-            .style("text-anchor", "middle")
-            .text(function (d) {
-                return d.data.type;
-            });
+    // adds the text to the node
+    node.append("text")
+        .attr("dy", ".35em")
+        .attr("y", function (d) {
+            return d.children ? -20 : 20;
+        })
+        .style("text-anchor", "middle")
+        .text(function (d) {
+            return d.data.type;
+        });
 }
 
 
