@@ -52,6 +52,7 @@ function evaluateASTtoD3(){
 	code_text = myCodeMirror.getValue();
 	var ast = Esprima.parse(code_text);
 
+	console.log(ast)
 	//Figure out what traverse does. 
 	traverse(ast, {
 	    pre: function (node) {
@@ -59,10 +60,9 @@ function evaluateASTtoD3(){
 	            node.body = [node.body];
 	        }
 	        node.children = node.body ? node.body : [];
-	    }
+	    } 
 	});  
 
-	console.log(ast) 
 	// https://javascriptstore.com/2017/10/15/visualize-ast-javascript/
 	// declares a tree layout and assigns the size
 	renderTree(ast) 
@@ -81,10 +81,11 @@ function evaluateASTtoD3(){
  		console.log(svg)
         var treeData = ast;
 
+        var scale = 1.5;
         // set the dimensions and margins of the diagram
-        var margin = {top: 40, right: 90, bottom: 50, left: 90},
-            width = 660 - margin.left - margin.right,
-            height = 500 - margin.top - margin.bottom;
+        var margin = {top: 40 / scale, right: 90/ scale, bottom: 50/ scale, left: 90/ scale},
+            width = 660 / scale - margin.left - margin.right,
+            height = 500 / scale - margin.top - margin.bottom;
 
         // declares a tree layout and assigns the size
         var treemap = d3.tree()

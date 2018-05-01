@@ -53,9 +53,9 @@ function evaluateASTtoD3(){
 	
 	// COPYING CODE FROM https://javascriptstore.com/2017/10/15/visualize-ast-javascript/
 	// declares a tree layout and assigns the size
-	var margin = {top: 40, right: 90, bottom: 50, left: 90},
-            width = 660 - margin.left - margin.right,
-            height = 500 - margin.top - margin.bottom;
+	var margin = {top: 20, right: 45, bottom: 25, left: 45},
+            width = 330 - margin.left - margin.right,
+            height = 250 - margin.top - margin.bottom;
 	
 
 	var treemap = d3.tree()
@@ -84,6 +84,7 @@ function evaluateASTtoD3(){
 		  + " " + d.parent.x + "," + (d.y + d.parent.y) / 2
 		  + " " + d.parent.x + "," + d.parent.y;
 	});
+
 
 	var node = g.selectAll(".node")
 			.data(nodes.descendants())
