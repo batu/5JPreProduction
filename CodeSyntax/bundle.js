@@ -16,7 +16,7 @@ var stroke = '#FFF';
 var text = '#FFF';
 var line = '#CCC';
 var margin = 30;
-var fontSize = 12;
+var fontSize = 18;
 var nodeFont = { 'font-size': fontSize,
 								 'font-family': 'Arial, Helvetica, sans-serif',
 								 'fill': text };
@@ -28,7 +28,7 @@ if (localStorage['text'] !== undefined){
 var myCodeMirror = CodeMirror(document.getElementById("codeeditor"), {
 	value : placeHolderText,
 	theme: "monokai",
-	lineNumbers: true,
+	lineNumbers: false,
 });
 
 evaluateASTtoD3();
@@ -103,11 +103,17 @@ function drawAST(ast) {
 			case 'Literal':
 				text = node["value"];
 				break;
+			case 'Program':
+				text = ""
+				break;
+				case 'ExpressionStatement':
+				text = "Expression"
+				break;
 			default:
 				for (var prop in node) {
 					if (node.hasOwnProperty(prop) && prop != 'type' &&
 							typeof node[prop] != 'object') {
-						text += prop + ': ' + node[prop] + '\n';
+						text += node[prop] + '\n';
 					}
 				}
 				break;
@@ -134,11 +140,33 @@ function drawAST(ast) {
 			paper.path(pathString).attr('stroke', line).attr('stroke-width', '1');
 		}
 		var boxY = xy[1] + fontSize;
-		var text = paper.text(xy[0] + box[0] / 2, boxY, node.type);
+		var renderableTitles = ["IfStatement", "WhileStatement"]
+		var typesToSkip = ["VariableDeclaration", "BinaryExpression", "Identifier", "ExpressionStatement"]
+
+		boxY = xy[1] + box[1] / 2
+		//var text = paper.text(xy[0] + box[0] / 2, boxY, node.type);
+		if (typesToSkip.indexOf(node.type) > -1){
+			text = paper.text(xy[0] + box[0] / 2, boxY, "");
+		}
+
+		switch (node.type) {
+				case "IfStatement":
+						text = paper.text(xy[0] + box[0] / 2, boxY, "If");
+						break;
+				case "WhileStatement":
+						text = paper.text(xy[0] + box[0] / 2, boxY, "While");
+						break;
+				case "Program":
+						text = paper.text(xy[0] + box[0] / 2, boxY, "Program");
+						break;
+				case "BlockStatement":
+						text = paper.text(xy[0] + box[0] / 2, boxY, "Scoping Block");
+						break;
+		}
 		text.attr(nodeFont).attr({'font-size': fontSize + 2});
 
 		// Write out some properties
-		writeNodeInfo(xy[0] + box[0] / 2, boxY + fontSize + box[1]/4, node);
+		writeNodeInfo(xy[0] + box[0] / 2, boxY, node);
 	}
 
 	function enumerateChildren(xy, ast, parentLineConnectXY) {
@@ -163,8 +191,9 @@ function drawAST(ast) {
 																	 'arguments'];
 		for (var i = 0; i < possibleChildProperties.length; i++) {
 			if (ast.hasOwnProperty(possibleChildProperties[i]) &&
-					ast[possibleChildProperties[i]] !== null) {
+					ast[possibleChildProperties[i]] !== null)  {
 				children = children.concat(ast[possibleChildProperties[i]]);
+				console.log(ast[possibleChildProperties[i]]["type"]);
 			}
 		}
 
