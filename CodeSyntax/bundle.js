@@ -1,15 +1,13 @@
 (function(){function r(e,n,t){function o(i,f){if(!n[i]){if(!e[i]){var c="function"==typeof require&&require;if(!f&&c)return c(i,!0);if(u)return u(i,!0);var a=new Error("Cannot find module '"+i+"'");throw a.code="MODULE_NOT_FOUND",a}var p=n[i]={exports:{}};e[i][0].call(p.exports,function(r){var n=e[i][1][r];return o(n||r)},p,p.exports,r,e,n,t)}return n[i].exports}for(var u="function"==typeof require&&require,i=0;i<t.length;i++)o(t[i]);return o}return r})()({1:[function(require,module,exports){
 var Esprima = require("esprima")
 
-
-var VIZ = false;
 // Code mirror part
-var placeHolderText = "5 * 5 + 10 / 2 \
-var x = 5";
+var placeHolderText = "x + 5 * 2";
+
+console.log("The fuck?")
 
 var parentElement = parentElement = document.getElementById('drawArea');
 var dimensions = [parentElement.clientWidth, parentElement.clientHeight];
-console.log(dimensions)
 //var paper = Raphael(parentElement);
 // AST options
 var box = [150, 60, 20]; // [w, h, border-radius]
@@ -37,43 +35,14 @@ evaluateASTtoD3();
 
 myCodeMirror.on("change", function(){
 	localStorage['text'] = myCodeMirror.getValue();
-	//evaluateYAMLtoD3();
 	evaluateASTtoD3();
 });
 
-function evaluateYAMLtoD3(){
-	value = myCodeMirror.getValue();
-	yaml = YAML.eval(value);
-	errors = YAML.getErrors();
-	if (Object.keys(yaml).length === 0 && yaml.constructor === Object){
-		console.log("CANT PARSE YAML!");
-	}else{
-		var indentedJsonString = JSON.stringify(yaml, null, 4);
-		var indentedJson = JSON.parse(indentedJsonString);
-
-		var num_circles = indentedJson.circle;
-		if (num_circles > 1000){
-			num_circles = 1000;
-		}
-		var nodes = [];
-		for(i = 0; i < num_circles; i++){
-			nodes.push(
-				{x: 30 + i * 30,
-					y: 30 + Math.floor(Math.random() * Math.floor(100))
-				}
-			);
-		}
-		d3Draw(nodes);
-	}
-}
-
-
 function evaluateASTtoD3(){
 
-	//console.log("In evaluateASTtoD3")
 	code_text = myCodeMirror.getValue();
 	var ast;
-	var parseError;
+	var parseError = false;
 	try {
 		ast = Esprima.parse(code_text);
 	} catch (e) {
@@ -83,21 +52,56 @@ function evaluateASTtoD3(){
 
 	// https://javascriptstore.com/2017/10/15/visualize-ast-javascript/
 	// declares a tree layout and assigns the size
-	if (! parseError) {
-		// Redraw the AST
-		//paper.clear();
-		//drawAST(ast);
+
+	if (!parseError && ast["body"].length != 0) {
 		drawASTwithD3(ast);
+	}else{
+		drawError();
 	}
+
+}
+
+function drawError(){
+
+	var container = "#drawArea"
+
+	d3.select(container)
+		.select("svg")
+		.remove()
+
+	var svg = d3.select(container).append("svg");
+
+	var svg_witdh = 1000
+	var svg_height = 1000
+
+	svg.attr("width", svg_witdh);
+	svg.attr("height", svg_height);
+
+	d3.select('svg')
+		.append('rect')
+			.classed('node', true)
+			.attr('x', svg_witdh / 2 - 300)
+			.attr('y', svg_height / 4 - 100)
+			.attr('height', 200)
+			.attr('width', 600)
+			.attr("fill", "red")
+
+	d3.select('svg')
+		.append("text")
+			.attr("x", svg_witdh / 2)
+			.attr("y", svg_height / 4)
+			.attr("text-anchor", "middle")
+			.text(function(text) {return "PARSING ERROR! PLEASE TYPE SOME DECENT WORDS"})
+			.attr("font", nodeFont)
 
 }
 
 function drawASTwithD3(ast) {
 
 	function drawAddTextToD3Node(node, current_d3_node) {
-
 		var renderableTitles = ["IfStatement", "WhileStatement"]
 		var typesToSkip = ["VariableDeclaration", "BinaryExpression", "Identifier", "ExpressionStatement"]
+
 		switch (node.type) {
 			case 'CallExpression':
 				current_d3_node["text"] = node.callee.name;
@@ -120,11 +124,12 @@ function drawASTwithD3(ast) {
 			case 'ExpressionStatement':
 				current_d3_node["text"] = "Expression"
 				break;
+
 			default:
 				for (var prop in node) {
 					if (node.hasOwnProperty(prop) && prop != 'type' &&
 							typeof node[prop] != 'object') {
-						current_d3_node["text"] = node[prop] + '\n';
+						current_d3_node["text"] = node[prop];
 					}
 				}
 				break;
@@ -132,9 +137,6 @@ function drawASTwithD3(ast) {
 	}
 
 	function enumerateChildrenForD3Tree(ast, current_node) {
-
-		// Draw this node
-		drawAddTextToD3Node(ast, current_node);
 
 		// Find children of this node
 		var children = [];
@@ -154,20 +156,28 @@ function drawASTwithD3(ast) {
 																	 'expression',
 																	 'argument',
 																	 'arguments'];
-		for (var i = 0; i < possibleChildProperties.length; i++) {
-			if (ast.hasOwnProperty(possibleChildProperties[i]) &&
-					ast[possibleChildProperties[i]] !== null)  {
-				children = children.concat(ast[possibleChildProperties[i]]);
-				// if (!typesToSkip.indexOf(ast[possibleChildProperties[i]]["type"]) > -1 ){
-					current_node["children"].push({"text":""})
-				// }
-			}
-		}
 
-			for (var i = 0; i < children.length; i++) {
-				enumerateChildrenForD3Tree(children[i], current_node["children"][i]);
+		for (var i = 0; i < possibleChildProperties.length; i++) {
+			if (ast.hasOwnProperty(possibleChildProperties[i]) &&	ast[possibleChildProperties[i]] !== null){
+				children = children.concat(ast[possibleChildProperties[i]]);
+				current_node["children"] = []
+				for(var j = 0; j < children.length; j++){
+					current_node["children"].push({"text":""})
+				}
+				console.log(children)
+				console.log(current_node)
 			}
 		}
+		// console.log(children)
+		// console.log(current_node["children"])
+
+		// Draw this node
+		drawAddTextToD3Node(ast, current_node);
+
+		for (var i = 0; i < current_node["children"].length; i++) {
+			enumerateChildrenForD3Tree(children[i], current_node["children"][i]);
+		}
+	}
 
 	// Send the root node in for enumeration
 
@@ -178,10 +188,12 @@ function drawASTwithD3(ast) {
 	d3.select(container)
 		.select("svg")
 		.remove()
+
   var tree = {
-							"text":""
+
 						 }
 
+	console.log(ast)
 	enumerateChildrenForD3Tree(ast, tree);
 	drawD3fromTree(tree)
 
@@ -190,7 +202,7 @@ function drawASTwithD3(ast) {
 function drawD3fromTree(tree){
 	var root = d3.hierarchy(tree)
 
-	var svg_witdh = 2000;
+	var svg_witdh = 4000;
 	var svg_height = root.height * 500;
 
 	var svg = d3.select(container).append("svg");
@@ -203,7 +215,6 @@ function drawD3fromTree(tree){
 	treeLayout.size([svg_witdh, svg_height]);
 	treeLayout(root);
 
-	console.log(root)
 	var normalization = 5
 	var y_margin = 200
 
@@ -243,250 +254,6 @@ function drawD3fromTree(tree){
 			.text(function(d) {return d["data"]["text"]})
 			.attr("font", nodeFont)
 }
-
-function drawAST(ast) {
-	function writeNodeInfo(x, y, node) {
-		var text = '';
-		switch (node.type) {
-			case 'CallExpression':
-				text = node.callee.name;
-				break;
-			case 'VariableDeclarator':
-				text = node.id.name;
-				break;
-			case 'Literal':
-				text = node["value"];
-				break;
-			case 'Program':
-				text = ""
-				break;
-				case 'ExpressionStatement':
-				text = "Expression"
-				break;
-			default:
-				for (var prop in node) {
-					if (node.hasOwnProperty(prop) && prop != 'type' &&
-							typeof node[prop] != 'object') {
-						text += node[prop] + '\n';
-					}
-				}
-				break;
-		}
-		if (text != '') {
-			paper.text(x, y, text).attr(nodeFont);
-		}
-	}
-
-	function drawNode(xy, node, parentLineConnectXY) {
-		// Draw the node
-		var rect = paper.rect(xy[0], xy[1], box[0], box[1], box[2]);
-		rect.attr({'stroke': stroke, 'fill': fill});
-		// Draw the line connecting this node to the parent
-		if (parentLineConnectXY) {
-			// Copy parentLineConnectXY
-			var p = [parentLineConnectXY[0], parentLineConnectXY[1]];
-			p[0] -= (box[0]) / 2;
-			p[1] += box[1];
-			var d = [xy[0], xy[1]];
-			d[0] += (box[0]) / 2;
-			d[1] += 0;
-			var pathString = 'M' + p.join(' ') + ' L' + d.join(' ') + 'Z';
-			paper.path(pathString).attr('stroke', line).attr('stroke-width', '1');
-		}
-		var boxY = xy[1] + fontSize;
-		var renderableTitles = ["IfStatement", "WhileStatement"]
-		var typesToSkip = ["VariableDeclaration", "BinaryExpression", "Identifier", "ExpressionStatement"]
-
-		boxY = xy[1] + box[1] / 2
-		//var text = paper.text(xy[0] + box[0] / 2, boxY, node.type);
-		if (typesToSkip.indexOf(node.type) > -1){
-			text = paper.text(xy[0] + box[0] / 2, boxY, "");
-		}
-
-		switch (node.type) {
-				case "IfStatement":
-						text = paper.text(xy[0] + box[0] / 2, boxY, "If");
-						break;
-				case "WhileStatement":
-						text = paper.text(xy[0] + box[0] / 2, boxY, "While");
-						break;
-				case "Program":
-						text = paper.text(xy[0] + box[0] / 2, boxY, "Program");
-						break;
-				case "BlockStatement":
-						text = paper.text(xy[0] + box[0] / 2, boxY, "Scoping Block");
-						break;
-		}
-		text.attr(nodeFont).attr({'font-size': fontSize + 2});
-
-		// Write out some properties
-		writeNodeInfo(xy[0] + box[0] / 2, boxY, node);
-	}
-
-	function enumerateChildren(xy, ast, parentLineConnectXY) {
-		// Draw this node
-		drawNode(xy, ast, parentLineConnectXY);
-		xy[0] += box[0] + margin;
-
-		// Find children of this node
-		var children = [];
-		// The order of these matters
-		// eg in a while statement the test must come before the body
-		var possibleChildProperties = ['test',
-																	 'body',
-																	 'consequent',
-																	 'alternate',
-																	 'init',
-																	 'declarations',
-																	 'left',
-																	 'right',
-																	 'expression',
-																	 'argument',
-																	 'arguments'];
-		for (var i = 0; i < possibleChildProperties.length; i++) {
-			if (ast.hasOwnProperty(possibleChildProperties[i]) &&
-					ast[possibleChildProperties[i]] !== null)  {
-				children = children.concat(ast[possibleChildProperties[i]]);
-			}
-		}
-
-		if (children.length > 0) {
-
-			// Copy XY by value to store parent coords for connecting lines
-			parentLineConnectXY = [xy[0] - margin, xy[1]];
-
-			// New line for children
-			xy[1] += box[1] + margin;
-			xy[0] -= box[0] + margin;
-			// Work out where the first child X needs to be
-			// based on the number of children and box width
-			if (children.length > 1) {
-				// Add half a box
-				xy[0] += box[0] / 2;
-				// Add half a margin
-				xy[0] += margin / 2;
-				// Take away half children * (box widths+margin)
-				xy[0] -= children.length / 2 * (box[0] + margin);
-			}
-
-			for (var i = 0; i < children.length; i++) {
-				enumerateChildren(xy, children[i], parentLineConnectXY);
-			}
-		}
-	}
-	// Send the root node in for enumeration
-	enumerateChildren([(dimensions[0] / 2) - (box[0] / 2), margin], ast);
-}
-
-
-function createRenderTree(esprimaAST){
-	if (current["type"] == "BinaryExpression"){
-			var operator = current["operator"];
-	}
-	return esprimaAST
-}
-
- function renderTree(ast) {
-
- 		container = "#graph"
-
- 		// Remove old SVG
- 		d3.select(container)
- 			.select("svg")
- 			.remove()
-    var treeData = ast;
-
-    var scale = 1.5;
-    // set the dimensions and margins of the diagram
-    var margin = {top: 40 / scale, right: 90/ scale, bottom: 50/ scale, left: 90/ scale},
-        width = 660 / scale - margin.left - margin.right,
-        height = 500 / scale - margin.top - margin.bottom;
-
-    // declares a tree layout and assigns the size
-    var treemap = d3.tree()
-        .size([width, height]);
-
-    //  assigns the data to a hierarchy using parent-child relationships
-    var nodes = d3.hierarchy(treeData);
-
-    // maps the node data to the tree layout
-    nodes = treemap(nodes);
-
-    // append the svg obgect to the body of the page
-    // appends a 'group' element to 'svg'
-    // moves the 'group' element to the top left margin
-    var svg = d3.select(container).append("svg")
-            .attr("width", width + margin.left + margin.right)
-            .attr("height", height + margin.top + margin.bottom),
-        g = svg.append("g")
-            .attr("transform",
-                "translate(" + margin.left + "," + margin.top + ")");
-
-    // adds the links between the nodes
-    var link = g.selectAll(".link")
-        .data(nodes.descendants().slice(1))
-        .enter().append("path")
-        .attr("class", "link")
-        .attr("d", function (d) {
-            return "M" + d.x + "," + d.y
-                + "C" + d.x + "," + (d.y + d.parent.y) / 2
-                + " " + d.parent.x + "," + (d.y + d.parent.y) / 2
-                + " " + d.parent.x + "," + d.parent.y;
-        });
-
-    // adds each node as a group
-    var node = g.selectAll(".node")
-        .data(nodes.descendants())
-        .enter().append("g")
-        .attr("class", function (d) {
-            return "node" +
-                (d.children ? " node--internal" : " node--leaf");
-        })
-        .attr("transform", function (d) {
-            return "translate(" + d.x + "," + d.y + ")";
-        });
-
-    // adds the circle to the node
-    node.append("circle")
-        .attr("r", 10);
-
-    // adds the text to the node
-    node.append("text")
-        .attr("dy", ".35em")
-        .attr("y", function (d) {
-            return d.children ? -20 : 20;
-        })
-        .style("text-anchor", "middle")
-        .text(function (d) {
-            return d.data.type;
-        });
-}
-
-
-
-// D3 Part
-function circles(){
-	var vis = d3.select("#graph")
-	.append("svg")
-	.attr("width", 2000).attr("height", 200);
-
-	function d3Draw(nodes){
-		vis.selectAll("*").remove();
-		vis.selectAll("circle.nodes")
-		.data(nodes)
-		.enter()
-		.append("svg:circle")
-		.attr("cx", function(d) { return d.x; })
-		.attr("cy", function(d) { return d.y; })
-		.attr("r", "10px")
-		.attr("fill", "black");
-	}
-
-	evaluateASTtoD3();
-}
-
-//evaluateYAMLtoD3();
-
 
 
 
