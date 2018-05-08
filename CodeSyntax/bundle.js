@@ -90,7 +90,9 @@ function drawError(){
 			.attr("y", svg_height / 4)
 			.attr("text-anchor", "middle")
 			.text(function(text) {return "PARSING ERROR! PLEASE TYPE SOME DECENT WORDS"})
-			.attr("font", nodeFont)
+			.attr("font-family", nodeFont["font-family"])
+			.attr('fill', nodeFont["fill"])
+			.attr("font-size", nodeFont["font-sis"])
 
 }
 
@@ -102,7 +104,7 @@ function drawASTwithD3(ast) {
 
 		switch (node.type) {
 			case 'CallExpression':
-				current_d3_node["text"] = node.callee.name;
+				current_d3_node["text"] = "Called " + node.callee.name;
 				break;
 			case 'VariableDeclarator':
 				current_d3_node["text"] = node.id.name;
@@ -122,7 +124,9 @@ function drawASTwithD3(ast) {
 			case 'ExpressionStatement':
 				current_d3_node["text"] = "Expression"
 				break;
-
+			case 'FunctionDeclaration':
+				current_d3_node["text"] = "Declare " + node.id.name;
+				break;
 			default:
 				for (var prop in node) {
 					if (node.hasOwnProperty(prop) && prop != 'type' &&
@@ -138,7 +142,6 @@ function drawASTwithD3(ast) {
 
 		// Find children of this node
 		var children = [];
-		current_node["children"] = []
 		// The order of these matters
 		// eg in a while statement the test must come before the body
 		var typesToSkip = ["VariableDeclaration", "BinaryExpression", "Identifier", "ExpressionStatement", "AssignmentExpression"]
@@ -158,13 +161,14 @@ function drawASTwithD3(ast) {
 		for (var i = 0; i < possibleChildProperties.length; i++) {
 			if (ast.hasOwnProperty(possibleChildProperties[i]) &&	ast[possibleChildProperties[i]] !== null){
 				children = children.concat(ast[possibleChildProperties[i]]);
-				current_node["children"] = []
-				for(var j = 0; j < children.length; j++){
-					current_node["children"].push({"text":""})
-				}
-				console.log(children)
-				console.log(current_node)
+
 			}
+		}
+
+		for(var j = 0; j < children.length; j++){
+			current_node["children"].push({"parent":current_node,
+																		 "text":"",
+																	 	 "children":[]})
 		}
 		// console.log(children)
 		// console.log(current_node["children"])
@@ -187,20 +191,46 @@ function drawASTwithD3(ast) {
 		.select("svg")
 		.remove()
 
-  var tree = {}
+  var tree = {"parent":null,
+							"children":[],
+							"text":""}
 
-	console.log(ast)
 	enumerateChildrenForD3Tree(ast, tree);
+	tree = removeEmptyNodes(tree)
 	drawD3fromTree(tree)
-
 }
 
+function removeEmptyNodes(node){
+	if(!node["text"]){
+		for (var i = 0; i < node["children"].length; i++) {
+			node["children"][i]["parent"] = node["parent"]
+			node["parent"]["children"].push(node["children"][i])
+		}
+		var index = node["parent"]["children"].indexOf(node);
+		if (index > -1) {
+			node["parent"]["children"].splice(index, 1);
+			console.log(node["parent"]["children"])
+		}
+	}
+	if(node["children"].length == 0){
+		return node
+	} else {
+		for (var i = 0; i < node["children"].length; i++) {
+			removeEmptyNodes(node["children"][i])
+		}
+	}
+	return node
+}
+
+var svg_witdh;
+var svg_height;
 function drawD3fromTree(tree){
 	var root = d3.hierarchy(tree)
 
-	var svg_witdh = 4000;
-	var svg_height = root.height * 500;
-
+	var radius = 45
+	var y_margin = radius
+	svg_witdh = root.children.length * 400;
+	svg_height = root.height * 125 + radius
 	var svg = d3.select(container).append("svg");
 	svg.attr("width", svg_witdh);
 	svg.attr("height", svg_height);
@@ -208,11 +238,9 @@ function drawD3fromTree(tree){
 
 	var treeLayout = d3.tree();
 
-	treeLayout.size([svg_witdh, svg_height]);
+	treeLayout.size([svg_witdh, svg_height - radius * 2]);
 	treeLayout(root);
 
-	var normalization = 5
-	var y_margin = 200
 
 	// Links
 	d3.select('svg')
@@ -221,10 +249,10 @@ function drawD3fromTree(tree){
 	  .enter()
 	  .append('line')
 	  .classed('link', true)
-	  .attr('x1', function(d) {return d.source.x / normalization;})
-	  .attr('y1', function(d) {return (d.source.y + y_margin)/ normalization;})
-	  .attr('x2', function(d) {return d.target.x / normalization;})
-	  .attr('y2', function(d) {return (d.target.y + y_margin)/ normalization;})
+	  .attr('x1', function(d) {return d.source.x;})
+	  .attr('y1', function(d) {return (d.source.y + y_margin);})
+	  .attr('x2', function(d) {return d.target.x;})
+	  .attr('y2', function(d) {return (d.target.y + y_margin)})
 		.attr("stroke", "black")
 		.attr("store-width", 1)
 
@@ -234,9 +262,9 @@ function drawD3fromTree(tree){
 	  .enter()
 		.append('circle')
 			.classed('node', true)
-			.attr('cx', function(d) {return d.x / normalization;})
-			.attr('cy', function(d) {return (d.y + y_margin) / normalization;})
-			.attr('r', 40)
+			.attr('cx', function(d) {return d.x;})
+			.attr('cy', function(d) {return (d.y + y_margin)})
+			.attr('r', radius)
 			.attr("fill", "#3AA")
 
 	d3.select('svg')
@@ -244,14 +272,127 @@ function drawD3fromTree(tree){
 	  .data(root.descendants())
 		.enter()
 		.append("text")
-			.attr("x", function(d) {return d.x / normalization;})
-			.attr("y", function(d) {return (d.y + y_margin)/ normalization;})
+			.attr("x", function(d) {return d.x;})
+			.attr("y", function(d) {return (d.y + y_margin)})
 			.attr("text-anchor", "middle")
 			.text(function(d) {return d["data"]["text"]})
-			.attr("font", nodeFont)
+			.attr("font-family", nodeFont["font-family"])
+			.attr('fill', nodeFont["fill"])
+			.attr("font-size", nodeFont["font-sis"])
 }
 
 
+d3.select('#saveButton').on('click', function(){
+	var svg = d3.select('svg')
+	var svgString = getSVGString(svg.node());
+	svgString2Image( svgString, svg_witdh, svg_height, 'png', save ); // passes Blob and filesize String to the callback
+
+	function save( dataBlob, filesize ){
+		saveAs( dataBlob, 'D3 vis exported to PNG.png' ); // FileSaver.js function
+	}
+});
+
+
+// Below are the functions that handle actual exporting:
+// getSVGString ( svgNode ) and svgString2Image( svgString, width, height, format, callback )
+function getSVGString( svgNode ) {
+	svgNode.setAttribute('xlink', 'http://www.w3.org/1999/xlink');
+	var cssStyleText = getCSSStyles( svgNode );
+	appendCSS( cssStyleText, svgNode );
+
+	var serializer = new XMLSerializer();
+	var svgString = serializer.serializeToString(svgNode);
+	svgString = svgString.replace(/(\w+)?:?xlink=/g, 'xmlns:xlink='); // Fix root xlink without namespace
+	svgString = svgString.replace(/NS\d+:href/g, 'xlink:href'); // Safari NS namespace fix
+
+	return svgString;
+
+	function getCSSStyles( parentElement ) {
+		var selectorTextArr = [];
+
+		// Add Parent element Id and Classes to the list
+		selectorTextArr.push( '#'+parentElement.id );
+		for (var c = 0; c < parentElement.classList.length; c++)
+				if ( !contains('.'+parentElement.classList[c], selectorTextArr) )
+					selectorTextArr.push( '.'+parentElement.classList[c] );
+
+		// Add Children element Ids and Classes to the list
+		var nodes = parentElement.getElementsByTagName("*");
+		for (var i = 0; i < nodes.length; i++) {
+			var id = nodes[i].id;
+			if ( !contains('#'+id, selectorTextArr) )
+				selectorTextArr.push( '#'+id );
+
+			var classes = nodes[i].classList;
+			for (var c = 0; c < classes.length; c++)
+				if ( !contains('.'+classes[c], selectorTextArr) )
+					selectorTextArr.push( '.'+classes[c] );
+		}
+
+		// Extract CSS Rules
+		var extractedCSSText = "";
+		for (var i = 0; i < document.styleSheets.length; i++) {
+			var s = document.styleSheets[i];
+
+			try {
+			    if(!s.cssRules) continue;
+			} catch( e ) {
+		    		if(e.name !== 'SecurityError') throw e; // for Firefox
+		    		continue;
+		    	}
+
+			var cssRules = s.cssRules;
+			for (var r = 0; r < cssRules.length; r++) {
+				if ( contains( cssRules[r].selectorText, selectorTextArr ) )
+					extractedCSSText += cssRules[r].cssText;
+			}
+		}
+
+
+		return extractedCSSText;
+
+		function contains(str,arr) {
+			return arr.indexOf( str ) === -1 ? false : true;
+		}
+
+	}
+
+	function appendCSS( cssText, element ) {
+		var styleElement = document.createElement("style");
+		styleElement.setAttribute("type","text/css");
+		styleElement.innerHTML = cssText;
+		var refNode = element.hasChildNodes() ? element.children[0] : null;
+		element.insertBefore( styleElement, refNode );
+	}
+}
+
+
+function svgString2Image( svgString, width, height, format, callback ) {
+	var format = format ? format : 'png';
+
+	var imgsrc = 'data:image/svg+xml;base64,'+ btoa( unescape( encodeURIComponent( svgString ) ) ); // Convert SVG string to data URL
+
+	var canvas = document.createElement("canvas");
+	var context = canvas.getContext("2d");
+
+	canvas.width = width;
+	canvas.height = height;
+
+	var image = new Image();
+	image.onload = function() {
+		context.clearRect ( 0, 0, width, height );
+		context.drawImage(image, 0, 0, width, height);
+
+		canvas.toBlob( function(blob) {
+			var filesize = Math.round( blob.length/1024 ) + ' KB';
+			if ( callback ) callback( blob, filesize );
+		});
+
+
+	};
+
+	image.src = imgsrc;
+}
 
 },{"esprima":2}],2:[function(require,module,exports){
 (function webpackUniversalModuleDefinition(root, factory) {
