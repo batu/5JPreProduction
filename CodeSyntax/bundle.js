@@ -64,6 +64,10 @@ function drawError(ast){
 
 	var container = "#drawArea"
 
+	var message = ast["errorMessage"]
+	if(!message){
+		message = "Start coding to see what the program sees!"
+	}
 	d3.select(container)
 		.select("svg")
 		.remove()
@@ -90,7 +94,7 @@ function drawError(ast){
 			.attr("x", svg_witdh / 2)
 			.attr("y", svg_height / 4)
 			.attr("text-anchor", "middle")
-			.text(function(text) {return ast["errorMessage"]})
+			.text(function(text) {return message})
 			.attr("font-family", nodeFont["font-family"])
 			.attr('fill', nodeFont["fill"])
 			.attr("font-size", nodeFont["font-sis"])
