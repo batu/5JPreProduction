@@ -2,7 +2,7 @@
 var Esprima = require("esprima")
 
 
-var VIZ = true;
+var VIZ = false;
 // Code mirror part
 var placeHolderText = "5 * 5 + 10 / 2 \
 var x = 5";
@@ -102,6 +102,12 @@ function drawASTwithD3(ast) {
 			case 'VariableDeclarator':
 				current_d3_node["text"] = node.id.name;
 				break;
+			case 'IfStatement':
+				current_d3_node["text"] = "If";
+				break;
+			case 'WhileStatement':
+				current_d3_node["text"] = "While";
+				break;
 			case 'Literal':
 				current_d3_node["text"] = node["value"];
 				break;
@@ -171,6 +177,8 @@ function drawASTwithD3(ast) {
 		current_node["children"] = []
 		// The order of these matters
 		// eg in a while statement the test must come before the body
+		var typesToSkip = ["VariableDeclaration", "BinaryExpression", "Identifier", "ExpressionStatement", "AssignmentExpression"]
+
 		var possibleChildProperties = ['test',
 																	 'body',
 																	 'consequent',
@@ -186,8 +194,11 @@ function drawASTwithD3(ast) {
 			if (ast.hasOwnProperty(possibleChildProperties[i]) &&
 					ast[possibleChildProperties[i]] !== null)  {
 				children = children.concat(ast[possibleChildProperties[i]]);
-				current_node["children"].push({"text":""
-																			})
+				console.log(ast[possibleChildProperties[i]]["type"])
+				if (!typesToSkip.indexOf(ast[possibleChildProperties[i]]["type"]) > -1 ){
+					current_node["children"].push({"text":""})
+				}
+
 			}
 		}
 
@@ -219,6 +230,9 @@ function drawASTwithD3(ast) {
 
 	var scale = 1.5;
 	// set the dimensions and margins of the diagram
+	d3.select(container)
+		.select("svg")
+		.remove()
 
 	var svg = d3.select(container).append("svg");
 	svg.attr("width", 4000);
@@ -234,30 +248,49 @@ function drawASTwithD3(ast) {
 	var root = d3.hierarchy(tree)
 	console.log(root)
 	var treeLayout = d3.tree();
-	treeLayout.size([2000, 2000]);
+	treeLayout.size([4000, 4000]);
 	treeLayout(root);
 
-	d3.select('svg g.nodes')
-	  .selectAll('circle.node')
-	  .data(root.descendants())
-	  .enter()
-	  .append('circle')
-	  .classed('node', true)
-	  .attr('cx', function(d) {return d.x;})
-	  .attr('cy', function(d) {return d.y;})
-	  .attr('r', 4);
+	console.log(root.descendants())
+	var normalization = 5
+	var y_margin = 200
 
 	// Links
-	d3.select('svg g.links')
+	d3.select('svg')
 	  .selectAll('line.link')
 	  .data(root.links())
 	  .enter()
 	  .append('line')
 	  .classed('link', true)
-	  .attr('x1', function(d) {return d.source.x;})
-	  .attr('y1', function(d) {return d.source.y;})
-	  .attr('x2', function(d) {return d.target.x;})
-	  .attr('y2', function(d) {return d.target.y;});
+	  .attr('x1', function(d) {return d.source.x / normalization;})
+	  .attr('y1', function(d) {return (d.source.y + y_margin)/ normalization;})
+	  .attr('x2', function(d) {return d.target.x / normalization;})
+	  .attr('y2', function(d) {return (d.target.y + y_margin)/ normalization;})
+		.attr("stroke", "black")
+		.attr("store-width", 1)
+
+	d3.select('svg')
+	  .selectAll('circle.node')
+	  .data(root.descendants())
+	  .enter()
+		.append('circle')
+			.classed('node', true)
+			.attr('cx', function(d) {return d.x / normalization;})
+			.attr('cy', function(d) {return (d.y + y_margin) / normalization;})
+			.attr('r', 40)
+			.attr("fill", "red")
+
+	d3.select('svg')
+	  .selectAll('text.text')
+	  .data(root.descendants())
+		.enter()
+		.append("text")
+			.attr("x", function(d) {return d.x / normalization;})
+			.attr("y", function(d) {return (d.y + y_margin)/ normalization;})
+			.attr("text-anchor", "middle")
+			.text(function(d) {return d["data"]["text"]})
+			.attr("font", nodeFont)
+
 }
 
 

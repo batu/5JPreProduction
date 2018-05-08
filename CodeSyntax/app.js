@@ -50,13 +50,13 @@ function evaluateASTtoD3(){
 	console.log("Yeah")
 	code_text = myCodeMirror.getValue();
 	var ast = Esprima.parse(code_text);
-	
+
 	// COPYING CODE FROM https://javascriptstore.com/2017/10/15/visualize-ast-javascript/
 	// declares a tree layout and assigns the size
 	var margin = {top: 20, right: 45, bottom: 25, left: 45},
             width = 330 - margin.left - margin.right,
             height = 250 - margin.top - margin.bottom;
-	
+
 
 	var treemap = d3.tree()
 	   .size([width, height]);
