@@ -2,7 +2,7 @@
 var Esprima = require("esprima")
 
 
-var VIZ = false;
+var VIZ = true;
 // Code mirror part
 var placeHolderText = "5 * 5 + 10 / 2 \
 var x = 5";
