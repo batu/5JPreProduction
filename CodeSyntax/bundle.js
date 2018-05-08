@@ -93,8 +93,11 @@ function evaluateASTtoD3(){
 }
 
 function drawASTwithD3(ast) {
-	function writeNodeInfoD3(x, y, node, current_d3_node, svg) {
-		var text = '';
+
+	function drawAddTextToD3Node(node, current_d3_node) {
+
+		var renderableTitles = ["IfStatement", "WhileStatement"]
+		var typesToSkip = ["VariableDeclaration", "BinaryExpression", "Identifier", "ExpressionStatement"]
 		switch (node.type) {
 			case 'CallExpression':
 				current_d3_node["text"] = node.callee.name;
@@ -126,51 +129,12 @@ function drawASTwithD3(ast) {
 				}
 				break;
 		}
-		if (current_d3_node["text"] != '') {
-			if(VIZ){
-				svg.append("text")
-						.attr("x", x)
-						.attr("y", y)
-						.attr("text-anchor", "middle")
-						.text(current_d3_node["text"])
-						.attr("font", nodeFont);
-			}
-		}
 	}
 
-	function drawNodeD3(xy, node, svg, current_d3_node) {
-		// Draw the node
-		//var rect = paper.rect(xy[0], xy[1], box[0], box[1], box[2]);
-		//rect.attr({'stroke': stroke, 'fill': fill});
-		if(VIZ){
-			var rect = svg.append("rect")
+	function enumerateChildrenForD3Tree(ast, current_node) {
 
-			rect.attr("x", xy[0]);
-			rect.attr("y", xy[1]);
-			rect.attr("width", box[0]);
-			rect.attr("height", box[1]);
-			rect.attr('fill', 'red')
-		}
-
-		var boxY = xy[1] + fontSize;
-		var renderableTitles = ["IfStatement", "WhileStatement"]
-		var typesToSkip = ["VariableDeclaration", "BinaryExpression", "Identifier", "ExpressionStatement"]
-
-		boxY = xy[1] + box[1] / 2
-		//var text = paper.text(xy[0] + box[0] / 2, boxY, node.type);
-		if (typesToSkip.indexOf(node.type) > -1){
-			//text = paper.text(xy[0] + box[0] / 2, boxY, "");
-		}
-
-		// Write out some properties
-		writeNodeInfoD3(xy[0] + box[0] / 2, boxY, node, current_d3_node, svg);
-	}
-
-	function enumerateChildrenD3(xy, ast, svg, current_node) {
 		// Draw this node
-
-		drawNodeD3(xy, ast, svg, current_node);
-		xy[0] += box[0] + margin;
+		drawAddTextToD3Node(ast, current_node);
 
 		// Find children of this node
 		var children = [];
@@ -194,36 +158,17 @@ function drawASTwithD3(ast) {
 			if (ast.hasOwnProperty(possibleChildProperties[i]) &&
 					ast[possibleChildProperties[i]] !== null)  {
 				children = children.concat(ast[possibleChildProperties[i]]);
-				console.log(ast[possibleChildProperties[i]]["type"])
-				if (!typesToSkip.indexOf(ast[possibleChildProperties[i]]["type"]) > -1 ){
+				// if (!typesToSkip.indexOf(ast[possibleChildProperties[i]]["type"]) > -1 ){
 					current_node["children"].push({"text":""})
-				}
-
+				// }
 			}
 		}
-
-		if (children.length > 0) {
-
-
-			// New line for children
-			xy[1] += box[1] + margin;
-			xy[0] -= box[0] + margin;
-			// Work out where the first child X needs to be
-			// based on the number of children and box width
-			if (children.length > 1) {
-				// Add half a box
-				xy[0] += box[0] / 2;
-				// Add half a margin
-				xy[0] += margin / 2;
-				// Take away half children * (box widths+margin)
-				xy[0] -= children.length / 2 * (box[0] + margin);
-			}
 
 			for (var i = 0; i < children.length; i++) {
-				enumerateChildrenD3(xy, children[i], svg, current_node["children"][i]);
+				enumerateChildrenForD3Tree(children[i], current_node["children"][i]);
 			}
 		}
-	}
+
 	// Send the root node in for enumeration
 
 	container = "#drawArea"
@@ -233,25 +178,32 @@ function drawASTwithD3(ast) {
 	d3.select(container)
 		.select("svg")
 		.remove()
-
-	var svg = d3.select(container).append("svg");
-	svg.attr("width", 4000);
-	svg.attr("height", 4000);
-
-
   var tree = {
 							"text":""
 						 }
 
-	enumerateChildrenD3([(dimensions[0] / 2) - (box[0] / 2), margin], ast, svg, tree);
+	enumerateChildrenForD3Tree(ast, tree);
+	drawD3fromTree(tree)
 
+}
+
+function drawD3fromTree(tree){
 	var root = d3.hierarchy(tree)
-	console.log(root)
+
+	var svg_witdh = 2000;
+	var svg_height = root.height * 500;
+
+	var svg = d3.select(container).append("svg");
+	svg.attr("width", svg_witdh);
+	svg.attr("height", svg_height);
+
+
 	var treeLayout = d3.tree();
-	treeLayout.size([4000, 4000]);
+
+	treeLayout.size([svg_witdh, svg_height]);
 	treeLayout(root);
 
-	console.log(root.descendants())
+	console.log(root)
 	var normalization = 5
 	var y_margin = 200
 
@@ -290,10 +242,7 @@ function drawASTwithD3(ast) {
 			.attr("text-anchor", "middle")
 			.text(function(d) {return d["data"]["text"]})
 			.attr("font", nodeFont)
-
 }
-
-
 
 function drawAST(ast) {
 	function writeNodeInfo(x, y, node) {
