@@ -4,8 +4,6 @@ var Esprima = require("esprima")
 // Code mirror part
 var placeHolderText = "x + 5 * 2";
 
-console.log("The fuck?")
-
 var parentElement = parentElement = document.getElementById('drawArea');
 var dimensions = [parentElement.clientWidth, parentElement.clientHeight];
 //var paper = Raphael(parentElement);
@@ -84,7 +82,7 @@ function drawError(){
 			.attr('y', svg_height / 4 - 100)
 			.attr('height', 200)
 			.attr('width', 600)
-			.attr("fill", "red")
+			.attr("fill", "#3AA")
 
 	d3.select('svg')
 		.append("text")
@@ -241,7 +239,7 @@ function drawD3fromTree(tree){
 			.attr('cx', function(d) {return d.x / normalization;})
 			.attr('cy', function(d) {return (d.y + y_margin) / normalization;})
 			.attr('r', 40)
-			.attr("fill", "red")
+			.attr("fill", "#3AA")
 
 	d3.select('svg')
 	  .selectAll('text.text')
