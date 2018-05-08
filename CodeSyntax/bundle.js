@@ -26,7 +26,7 @@ if (localStorage['text'] !== undefined){
 var myCodeMirror = CodeMirror(document.getElementById("codeeditor"), {
 	value : placeHolderText,
 	theme: "monokai",
-	lineNumbers: false,
+	lineNumbers: true,
 });
 
 evaluateASTtoD3();
@@ -54,12 +54,13 @@ function evaluateASTtoD3(){
 	if (!parseError && ast["body"].length != 0) {
 		drawASTwithD3(ast);
 	}else{
-		drawError();
+		console.log(ast["errorMessage"])
+		drawError(ast);
 	}
 
 }
 
-function drawError(){
+function drawError(ast){
 
 	var container = "#drawArea"
 
@@ -89,7 +90,7 @@ function drawError(){
 			.attr("x", svg_witdh / 2)
 			.attr("y", svg_height / 4)
 			.attr("text-anchor", "middle")
-			.text(function(text) {return "PARSING ERROR! PLEASE TYPE SOME DECENT WORDS"})
+			.text(function(text) {return ast["errorMessage"]})
 			.attr("font-family", nodeFont["font-family"])
 			.attr('fill', nodeFont["fill"])
 			.attr("font-size", nodeFont["font-sis"])
