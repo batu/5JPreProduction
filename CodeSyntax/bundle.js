@@ -1,14 +1,16 @@
 (function(){function r(e,n,t){function o(i,f){if(!n[i]){if(!e[i]){var c="function"==typeof require&&require;if(!f&&c)return c(i,!0);if(u)return u(i,!0);var a=new Error("Cannot find module '"+i+"'");throw a.code="MODULE_NOT_FOUND",a}var p=n[i]={exports:{}};e[i][0].call(p.exports,function(r){var n=e[i][1][r];return o(n||r)},p,p.exports,r,e,n,t)}return n[i].exports}for(var u="function"==typeof require&&require,i=0;i<t.length;i++)o(t[i]);return o}return r})()({1:[function(require,module,exports){
 var Esprima = require("esprima")
 
+
+var VIZ = false;
 // Code mirror part
 var placeHolderText = "5 * 5 + 10 / 2 \
 var x = 5";
 
 var parentElement = parentElement = document.getElementById('drawArea');
 var dimensions = [parentElement.clientWidth, parentElement.clientHeight];
-
-var paper = Raphael(parentElement);
+console.log(dimensions)
+//var paper = Raphael(parentElement);
 // AST options
 var box = [150, 60, 20]; // [w, h, border-radius]
 var fill = '#3AA';
@@ -81,14 +83,184 @@ function evaluateASTtoD3(){
 
 	// https://javascriptstore.com/2017/10/15/visualize-ast-javascript/
 	// declares a tree layout and assigns the size
-	console.log(ast)
 	if (! parseError) {
 		// Redraw the AST
-		paper.clear();
-		drawAST(ast);
+		//paper.clear();
+		//drawAST(ast);
+		drawASTwithD3(ast);
 	}
 
 }
+
+function drawASTwithD3(ast) {
+	function writeNodeInfoD3(x, y, node, current_d3_node, svg) {
+		var text = '';
+		switch (node.type) {
+			case 'CallExpression':
+				current_d3_node["text"] = node.callee.name;
+				break;
+			case 'VariableDeclarator':
+				current_d3_node["text"] = node.id.name;
+				break;
+			case 'Literal':
+				current_d3_node["text"] = node["value"];
+				break;
+			case 'Program':
+				current_d3_node["text"] = "Program"
+				break;
+			case 'ExpressionStatement':
+				current_d3_node["text"] = "Expression"
+				break;
+			default:
+				for (var prop in node) {
+					if (node.hasOwnProperty(prop) && prop != 'type' &&
+							typeof node[prop] != 'object') {
+						current_d3_node["text"] = node[prop] + '\n';
+					}
+				}
+				break;
+		}
+		if (current_d3_node["text"] != '') {
+			if(VIZ){
+				svg.append("text")
+						.attr("x", x)
+						.attr("y", y)
+						.attr("text-anchor", "middle")
+						.text(current_d3_node["text"])
+						.attr("font", nodeFont);
+			}
+		}
+	}
+
+	function drawNodeD3(xy, node, svg, current_d3_node) {
+		// Draw the node
+		//var rect = paper.rect(xy[0], xy[1], box[0], box[1], box[2]);
+		//rect.attr({'stroke': stroke, 'fill': fill});
+		if(VIZ){
+			var rect = svg.append("rect")
+
+			rect.attr("x", xy[0]);
+			rect.attr("y", xy[1]);
+			rect.attr("width", box[0]);
+			rect.attr("height", box[1]);
+			rect.attr('fill', 'red')
+		}
+
+		var boxY = xy[1] + fontSize;
+		var renderableTitles = ["IfStatement", "WhileStatement"]
+		var typesToSkip = ["VariableDeclaration", "BinaryExpression", "Identifier", "ExpressionStatement"]
+
+		boxY = xy[1] + box[1] / 2
+		//var text = paper.text(xy[0] + box[0] / 2, boxY, node.type);
+		if (typesToSkip.indexOf(node.type) > -1){
+			//text = paper.text(xy[0] + box[0] / 2, boxY, "");
+		}
+
+		// Write out some properties
+		writeNodeInfoD3(xy[0] + box[0] / 2, boxY, node, current_d3_node, svg);
+	}
+
+	function enumerateChildrenD3(xy, ast, svg, current_node) {
+		// Draw this node
+
+		drawNodeD3(xy, ast, svg, current_node);
+		xy[0] += box[0] + margin;
+
+		// Find children of this node
+		var children = [];
+		current_node["children"] = []
+		// The order of these matters
+		// eg in a while statement the test must come before the body
+		var possibleChildProperties = ['test',
+																	 'body',
+																	 'consequent',
+																	 'alternate',
+																	 'init',
+																	 'declarations',
+																	 'left',
+																	 'right',
+																	 'expression',
+																	 'argument',
+																	 'arguments'];
+		for (var i = 0; i < possibleChildProperties.length; i++) {
+			if (ast.hasOwnProperty(possibleChildProperties[i]) &&
+					ast[possibleChildProperties[i]] !== null)  {
+				children = children.concat(ast[possibleChildProperties[i]]);
+				current_node["children"].push({"text":""
+																			})
+			}
+		}
+
+		if (children.length > 0) {
+
+
+			// New line for children
+			xy[1] += box[1] + margin;
+			xy[0] -= box[0] + margin;
+			// Work out where the first child X needs to be
+			// based on the number of children and box width
+			if (children.length > 1) {
+				// Add half a box
+				xy[0] += box[0] / 2;
+				// Add half a margin
+				xy[0] += margin / 2;
+				// Take away half children * (box widths+margin)
+				xy[0] -= children.length / 2 * (box[0] + margin);
+			}
+
+			for (var i = 0; i < children.length; i++) {
+				enumerateChildrenD3(xy, children[i], svg, current_node["children"][i]);
+			}
+		}
+	}
+	// Send the root node in for enumeration
+
+	container = "#drawArea"
+
+	var scale = 1.5;
+	// set the dimensions and margins of the diagram
+
+	var svg = d3.select(container).append("svg");
+	svg.attr("width", 4000);
+	svg.attr("height", 4000);
+
+
+  var tree = {
+							"text":""
+						 }
+
+	enumerateChildrenD3([(dimensions[0] / 2) - (box[0] / 2), margin], ast, svg, tree);
+
+	var root = d3.hierarchy(tree)
+	console.log(root)
+	var treeLayout = d3.tree();
+	treeLayout.size([2000, 2000]);
+	treeLayout(root);
+
+	d3.select('svg g.nodes')
+	  .selectAll('circle.node')
+	  .data(root.descendants())
+	  .enter()
+	  .append('circle')
+	  .classed('node', true)
+	  .attr('cx', function(d) {return d.x;})
+	  .attr('cy', function(d) {return d.y;})
+	  .attr('r', 4);
+
+	// Links
+	d3.select('svg g.links')
+	  .selectAll('line.link')
+	  .data(root.links())
+	  .enter()
+	  .append('line')
+	  .classed('link', true)
+	  .attr('x1', function(d) {return d.source.x;})
+	  .attr('y1', function(d) {return d.source.y;})
+	  .attr('x2', function(d) {return d.target.x;})
+	  .attr('y2', function(d) {return d.target.y;});
+}
+
+
 
 function drawAST(ast) {
 	function writeNodeInfo(x, y, node) {
@@ -193,7 +365,6 @@ function drawAST(ast) {
 			if (ast.hasOwnProperty(possibleChildProperties[i]) &&
 					ast[possibleChildProperties[i]] !== null)  {
 				children = children.concat(ast[possibleChildProperties[i]]);
-				console.log(ast[possibleChildProperties[i]]["type"]);
 			}
 		}
 
