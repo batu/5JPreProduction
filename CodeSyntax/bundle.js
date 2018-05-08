@@ -187,9 +187,7 @@ function drawASTwithD3(ast) {
 		.select("svg")
 		.remove()
 
-  var tree = {
-
-						 }
+  var tree = {}
 
 	console.log(ast)
 	enumerateChildrenForD3Tree(ast, tree);
