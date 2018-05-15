@@ -1,13 +1,20 @@
 (function(){function r(e,n,t){function o(i,f){if(!n[i]){if(!e[i]){var c="function"==typeof require&&require;if(!f&&c)return c(i,!0);if(u)return u(i,!0);var a=new Error("Cannot find module '"+i+"'");throw a.code="MODULE_NOT_FOUND",a}var p=n[i]={exports:{}};e[i][0].call(p.exports,function(r){var n=e[i][1][r];return o(n||r)},p,p.exports,r,e,n,t)}return n[i].exports}for(var u="function"==typeof require&&require,i=0;i<t.length;i++)o(t[i]);return o}return r})()({1:[function(require,module,exports){
 var Esprima = require("esprima")
 
+var simpleParseString = "hat_1 = brown\nhat_2 = brown\nhead_1 = teal\nhead_2 = teal\nchin = teal\n\nhat_1 -> hat_2\nhead_1 -> chin\nchin -> head_2\nhead_1 -> hat_1\nhat_2 -> head_2\n\nbody = blue\nbelly = blue\narm_l = blue\narm_r = blue\nhand_l = teal\nhand_r = teal\n\nchin -> body\nbody -> belly\nbody -> arm_l\nbody -> arm_r\narm_r -> hand_r\narm_l -> hand_l\n\npelvis = red\nleg_r = red\nleg_l = red\nfoot_l = red\nfoot_r = teal\n\nbelly -> pelvis\npelvis -> leg_r\npelvis -> leg_l\nleg_l -> foot_l\nleg_r -> foot_r\n"
+
+var JSONParseString = '{\n	  "nodes": [\n	    {"id": "Head_1",   "color": "brown"},\n	    {"id": "Head_2",      "color": "brown"},\n	    {"id": "Head_3",  "color": "brown"},\n	    {"id": "Face_1", "color": "teal"},\n	    {"id": "Face_2", "color": "teal"},\n	    {"id": "Chin", "color": "teal"},\n\n	    {"id": "Body", "color": "blue"},\n	    {"id": "Belly", "color": "blue"},\n	    {"id": "Arm_L", "color": "blue"},\n	    {"id": "Arm_R", "color": "blue"},\n	    {"id": "Hand_L", "color": "teal"},\n	    {"id": "Hand_R", "color": "teal"},\n\n	    {"id": "Pelvis", "color": "red"},\n	    {"id": "Leg_R", "color": "red"},\n	    {"id": "Leg_L", "color": "red"},\n	    {"id": "Foot_R", "color": "teal"},\n	    {"id": "Foot_L", "color": "teal"}\n	 ],\n	  "links": [\n	    {"source": "Head_1", "target": "Head_2", "value": 10},\n	    {"source": "Head_2", "target": "Head_3", "value": 10},\n	    {"source": "Face_1", "target": "Head_1", "value": 10},\n	    {"source": "Face_2", "target": "Head_3", "value": 10},\n	    {"source": "Face_2", "target": "Chin", "value": 10},\n	    {"source": "Face_1", "target": "Chin", "value": 10},\n\n	    {"source": "Chin", "target": "Body", "value": 10},\n	    {"source": "Body", "target": "Belly", "value": 10},\n	    {"source": "Body", "target": "Arm_L", "value": 10},\n	    {"source": "Body", "target": "Arm_R", "value": 10},\n	    {"source": "Hand_R", "target": "Arm_R", "value": 10},\n	    {"source": "Hand_L", "target": "Arm_L", "value": 10},\n\n	    {"source": "Belly", "target": "Pelvis", "value": 10},\n	    {"source": "Pelvis", "target": "Leg_L", "value": 10},\n	    {"source": "Pelvis", "target": "Leg_R", "value": 10},\n	    {"source": "Foot_R", "target": "Leg_R", "value": 10},\n	    {"source": "Foot_L", "target": "Leg_L", "value": 10}\n	  ]\n	}\n'
+
 // Code mirror part
 var placeHolderText = "x + 5 * 2";
+
+var isJSON = false;
 
 var parentElement = parentElement = document.getElementById('drawArea');
 var dimensions = [parentElement.clientWidth, parentElement.clientHeight];
 //var paper = Raphael(parentElement);
 // AST options
+
 var box = [150, 60, 20]; // [w, h, border-radius]
 var fill = '#3AA';
 var stroke = '#FFF';
@@ -29,24 +36,79 @@ var myCodeMirror = CodeMirror(document.getElementById("codeeditor"), {
 	lineNumbers: true,
 });
 
-evaluateASTtoD3();
+evaluateTexttoD3();
 
 myCodeMirror.on("change", function(){
 	localStorage['text'] = myCodeMirror.getValue();
-	evaluateASTtoD3();
+	evaluateTexttoD3();
 });
 
-function evaluateASTtoD3(){
+
+function parseSimple(text){
+	var graph = {"nodes":[],
+							 "links":[]};
+	var lines = text.split("\n")
+	for(var i = 0; i < lines.length; i++){
+		if(lines[i].indexOf("=") >=0){
+			elements = lines[i].split("=").map(function(item) {
+				return item.trim();
+			});
+			var node = {};
+			node["id"] = elements[0];
+			node["color"] = elements[1];
+			if(elements[0] && elements[1]){
+				graph.nodes.push(node);
+			}
+		}else if(lines[i].indexOf("->") >=0){
+			elements = lines[i].split("->").map(function(item) {
+				return item.trim();
+			});
+			var node = {};
+			node["source"] = elements[0];
+			node["target"] = elements[1];
+			node["value"] = 10;
+			if(elements[0] && elements[1]){
+				graph.links.push(node);
+			}
+		}
+	}
+	return graph
+}
+
+d3.select('#toggleParserButton').on('click', function(){
+	isJSON = !isJSON;
+	console.log("clicked")
+	if(isJSON){
+		var elem = document.getElementById('toggleParserButton');
+		elem.innerHTML = "switch to SimpleParse"
+		localStorage['text'] = JSONParseString;
+		myCodeMirror.setValue(JSONParseString);
+	}else{
+		var elem = document.getElementById('toggleParserButton');
+		elem.innerHTML = "switch to JSON parsing"
+		localStorage['text'] = simpleParseString;
+		myCodeMirror.setValue(simpleParseString);
+	}
+	evaluateTexttoD3();
+});
+
+function evaluateTexttoD3(){
 
 	code_text = myCodeMirror.getValue();
 	var parseError = false;
-	var graph;
-	try {
-		var graph = JSON.parse(code_text)
-	} catch (e) {
-		parseError = true;
-		graph = {'errorMessage': e.message, 'errorObject': e};
+	var graph = {"nodes":[],
+							 "links":[]};
+	if (isJSON){
+		try {
+			var graph = JSON.parse(code_text)
+		} catch (e) {
+			parseError = true;
+			graph = {'errorMessage': e.message, 'errorObject': e};
+		}
+	} else {
+			graph = parseSimple(code_text);
 	}
+
 	// https://javascriptstore.com/2017/10/15/visualize-ast-javascript/
 	// declares a tree layout and assigns the size
 	if (!parseError && graph.length != 0) {
@@ -56,6 +118,8 @@ function evaluateASTtoD3(){
 		drawError(graph);
 	}
 }
+
+
 function drawError(ast){
 
 	var container = "#drawArea"
@@ -142,13 +206,16 @@ function drawForceDirected(graph){
   node.append("title")
       .text(function(d) { return d.id; });
 
+try{
   simulation
       .nodes(graph.nodes)
       .on("tick", ticked);
 
   simulation.force("link")
       .links(graph.links);
-
+}catch(TypeError){
+	simulation.stop()
+}
 	function dragstarted(d) {
 	  if (!d3.event.active) simulation.alphaTarget(0.3).restart();
 	  d.fx = d.x;

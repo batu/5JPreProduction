@@ -1,6 +1,14 @@
 (function(){function r(e,n,t){function o(i,f){if(!n[i]){if(!e[i]){var c="function"==typeof require&&require;if(!f&&c)return c(i,!0);if(u)return u(i,!0);var a=new Error("Cannot find module '"+i+"'");throw a.code="MODULE_NOT_FOUND",a}var p=n[i]={exports:{}};e[i][0].call(p.exports,function(r){var n=e[i][1][r];return o(n||r)},p,p.exports,r,e,n,t)}return n[i].exports}for(var u="function"==typeof require&&require,i=0;i<t.length;i++)o(t[i]);return o}return r})()({1:[function(require,module,exports){
 var Esprima = require("esprima")
 
+
+// var x = 5
+// if(x < 10){
+// 	x += 1
+//     var b = "Set value."
+// }
+// test(b)
+
 // Code mirror part
 var placeHolderText = "x + 5 * 2";
 
@@ -202,6 +210,7 @@ function drawASTwithD3(ast) {
 
 	enumerateChildrenForD3Tree(ast, tree);
 	tree = removeEmptyNodes(tree)
+	tree = fixAssignment(tree)
 	drawD3fromTree(tree)
 }
 
@@ -229,6 +238,30 @@ function removeEmptyNodes(node){
 	return node
 }
 
+function fixAssignment(node){
+
+	if(node.parent && (node.parent.text == "var")){
+		console.log(node.parent.text)
+
+		for (var i = 0; i < node["children"].length; i++) {
+			node["children"][i]["parent"] = node["parent"]
+			node["parent"]["children"].push(node["children"][i])
+		}
+		node["children"].splice(0, 1);
+		console.log(node["parent"]["children"])
+
+	}
+
+	if(node["children"].length == 0){
+		return node
+	} else {
+		for (var i = 0; i < node["children"].length; i++) {
+			fixAssignment(node["children"][i])
+		}
+	}
+	return node
+}
+
 var svg_witdh;
 var svg_height;
 function drawD3fromTree(tree){
@@ -248,21 +281,7 @@ function drawD3fromTree(tree){
 	treeLayout.size([svg_witdh, svg_height - radius * 2]);
 	treeLayout(root);
 
-	var simulation = d3.forceSimulation()
-		.force("link", d3.forceLink().id(function(d) { return d.id; }))
-		.force("charge", d3.forceManyBody())
-		.force("center", d3.forceCenter(svg_witdh / 2, svg_height / 2));
 
-
-	simulation
-				.nodes(root.descendants())
-				.on("tick", ticked);
-
-	simulation.force("link")
-				.links(root.links());
-
-	function ticked() {
-		// Links
 		var d3links = d3.select('svg')
 			.selectAll('line.link')
 			.data(root.links())
@@ -300,26 +319,7 @@ function drawD3fromTree(tree){
 				.attr('fill', nodeFont["fill"])
 				.attr("font-size", nodeFont["font-sis"])
 
-		}
 
-
-}
-
-function dragstarted(d) {
-  if (!d3.event.active) simulation.alphaTarget(0.3).restart();
-  d.fx = d.x;
-  d.fy = d.y;
-}
-
-function dragged(d) {
-  d.fx = d3.event.x;
-  d.fy = d3.event.y;
-}
-
-function dragended(d) {
-  if (!d3.event.active) simulation.alphaTarget(0);
-  d.fx = null;
-  d.fy = null;
 }
 
 
