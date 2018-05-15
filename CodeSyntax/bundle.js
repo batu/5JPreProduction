@@ -10,7 +10,14 @@ var Esprima = require("esprima")
 // test(b)
 
 // Code mirror part
-var placeHolderText = "x + 5 * 2";
+var placeHolderText = 'var x = 5\nif(x < 10){\n	x += 1\n    var b = "My Value"\n}\ntest(b)\n';
+
+// var x = 5
+// if(x < 10){
+// 	x += 1
+//     var b = "Set value."
+// }
+// test(b)
 
 var parentElement = parentElement = document.getElementById('drawArea');
 var dimensions = [parentElement.clientWidth, parentElement.clientHeight];
