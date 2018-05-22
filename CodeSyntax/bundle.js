@@ -333,7 +333,7 @@ function drawD3fromTree(tree){
 d3.select('#saveButton').on('click', function(){
 	var svg = d3.select('svg')
 	var svgString = getSVGString(svg.node());
-	svgString2Image( svgString, svg_witdh, svg_height, 'png', save ); // passes Blob and filesize String to the callback
+	svgString2Image( svgString, svg_witdh, svg_height, 'jpeg', save ); // passes Blob and filesize String to the callback
 
 	function save( dataBlob, filesize ){
 		saveAs( dataBlob, 'D3 vis exported to PNG.png' ); // FileSaver.js function

@@ -44,6 +44,14 @@ myCodeMirror.on("change", function(){
 });
 
 
+function Parse(parseFunction){
+
+}
+
+function Render(renderFunction){
+
+}
+
 function parseSimple(text){
 	var graph = {"nodes":[],
 							 "links":[]};
@@ -348,7 +356,9 @@ function svgString2Image( svgString, width, height, format, callback ) {
 
 	var image = new Image();
 	image.onload = function() {
-		context.clearRect ( 0, 0, width, height );
+		//context.clearRect ( 0, 0, width, height );
+		context.fillStyle = "white";
+		context.fillRect(0, 0, width, height);
 		context.drawImage(image, 0, 0, width, height);
 
 		canvas.toBlob( function(blob) {
