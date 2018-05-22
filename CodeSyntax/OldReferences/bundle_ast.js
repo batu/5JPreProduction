@@ -1,14 +1,29 @@
-(function(f){if(typeof exports==="object"&&typeof module!=="undefined"){module.exports=f()}else if(typeof define==="function"&&define.amd){define([],f)}else{var g;if(typeof window!=="undefined"){g=window}else if(typeof global!=="undefined"){g=global}else if(typeof self!=="undefined"){g=self}else{g=this}g.ast = f()}})(function(){var define,module,exports;return (function(){function r(e,n,t){function o(i,f){if(!n[i]){if(!e[i]){var c="function"==typeof require&&require;if(!f&&c)return c(i,!0);if(u)return u(i,!0);var a=new Error("Cannot find module '"+i+"'");throw a.code="MODULE_NOT_FOUND",a}var p=n[i]={exports:{}};e[i][0].call(p.exports,function(r){var n=e[i][1][r];return o(n||r)},p,p.exports,r,e,n,t)}return n[i].exports}for(var u="function"==typeof require&&require,i=0;i<t.length;i++)o(t[i]);return o}return r})()({1:[function(require,module,exports){
+(function(){function r(e,n,t){function o(i,f){if(!n[i]){if(!e[i]){var c="function"==typeof require&&require;if(!f&&c)return c(i,!0);if(u)return u(i,!0);var a=new Error("Cannot find module '"+i+"'");throw a.code="MODULE_NOT_FOUND",a}var p=n[i]={exports:{}};e[i][0].call(p.exports,function(r){var n=e[i][1][r];return o(n||r)},p,p.exports,r,e,n,t)}return n[i].exports}for(var u="function"==typeof require&&require,i=0;i<t.length;i++)o(t[i]);return o}return r})()({1:[function(require,module,exports){
 var Esprima = require("esprima")
 
 
-window.parseAST = parseAST;
+// var x = 5
+// if(x < 10){
+// 	x += 1
+//     var b = "Set value."
+// }
+// test(b)
 
-window.renderAST = renderAST;
+// Code mirror part
+var placeHolderText = 'var x = 5\nif(x < 10){\n	x += 1\n    var b = "My Value"\n}\ntest(b)\n';
 
-window.drawErrorAST = drawErrorAST;
+// var x = 5
+// if(x < 10){
+// 	x += 1
+//     var b = "Set value."
+// }
+// test(b)
 
-
+var parentElement = parentElement = document.getElementById('drawArea');
+var dimensions = [parentElement.clientWidth, parentElement.clientHeight];
+//var paper = Raphael(parentElement);
+// AST options
+var box = [150, 60, 20]; // [w, h, border-radius]
 var fill = '#3AA';
 var stroke = '#FFF';
 var text = '#FFF';
@@ -19,13 +34,48 @@ var nodeFont = { 'font-size': fontSize,
 								 'font-family': 'Arial, Helvetica, sans-serif',
 								 'fill': text };
 
-
-function parseAST(text){
-  var graph = Esprima.parse(text)
-	return graph
+if (localStorage['text'] !== undefined){
+	placeHolderText = localStorage['text'];
 }
 
-function drawErrorAST(ast){
+var myCodeMirror = CodeMirror(document.getElementById("codeeditor"), {
+	value : placeHolderText,
+	theme: "monokai",
+	lineNumbers: true,
+});
+
+evaluateASTtoD3();
+
+myCodeMirror.on("change", function(){
+	localStorage['text'] = myCodeMirror.getValue();
+	evaluateASTtoD3();
+});
+
+function evaluateASTtoD3(){
+
+	code_text = myCodeMirror.getValue();
+	var ast;
+	var parseError = false;
+	try {
+		ast = Esprima.parse(code_text);
+	} catch (e) {
+		parseError = true;
+		ast = {'errorMessage': e.message, 'errorObject': e};
+	}
+
+	// https://javascriptstore.com/2017/10/15/visualize-ast-javascript/
+	// declares a tree layout and assigns the size
+
+	if (!parseError && ast["body"].length != 0) {
+		drawASTwithD3(ast);
+	}else{
+		console.log(ast["errorMessage"])
+		drawError(ast);
+	}
+
+}
+
+function drawError(ast){
 
 	var container = "#drawArea"
 
@@ -66,12 +116,12 @@ function drawErrorAST(ast){
 
 }
 
-function renderAST(ast) {
+function drawASTwithD3(ast) {
 
 	function drawAddTextToD3Node(node, current_d3_node) {
 		var renderableTitles = ["IfStatement", "WhileStatement"]
 		var typesToSkip = ["VariableDeclaration", "BinaryExpression", "Identifier", "ExpressionStatement"]
-		console.log(node.type);
+
 		switch (node.type) {
 			case 'CallExpression':
 				current_d3_node["text"] = "Called " + node.callee.name;
@@ -172,7 +222,6 @@ function renderAST(ast) {
 }
 
 function removeEmptyNodes(node){
-	console.log(node)
 	if(!node["text"]){
 		for (var i = 0; i < node["children"].length; i++) {
 			node["children"][i]["parent"] = node["parent"]
@@ -182,13 +231,7 @@ function removeEmptyNodes(node){
 		var index = node["parent"]["children"].indexOf(node);
 		if (index > -1) {
 			node["parent"]["children"].splice(index, 1);
-			//console.log(node["parent"]["children"])
-		}
-		if(node["children"].length == 0){
-			var index = node["parent"]["children"].indexOf(node);
-			if (index > -1) {
-				node["parent"]["children"].splice(index, 1);
-			}
+			console.log(node["parent"]["children"])
 		}
 	}
 
@@ -205,14 +248,14 @@ function removeEmptyNodes(node){
 function fixAssignment(node){
 
 	if(node.parent && (node.parent.text == "var")){
-		//console.log(node.parent.text)
+		console.log(node.parent.text)
 
 		for (var i = 0; i < node["children"].length; i++) {
 			node["children"][i]["parent"] = node["parent"]
 			node["parent"]["children"].push(node["children"][i])
 		}
 		node["children"].splice(0, 1);
-		//console.log(node["parent"]["children"])
+		console.log(node["parent"]["children"])
 
 	}
 
@@ -284,6 +327,119 @@ function drawD3fromTree(tree){
 				.attr("font-size", nodeFont["font-sis"])
 
 
+}
+
+
+d3.select('#saveButton').on('click', function(){
+	var svg = d3.select('svg')
+	var svgString = getSVGString(svg.node());
+	svgString2Image( svgString, svg_witdh, svg_height, 'jpeg', save ); // passes Blob and filesize String to the callback
+
+	function save( dataBlob, filesize ){
+		saveAs( dataBlob, 'D3 vis exported to PNG.png' ); // FileSaver.js function
+	}
+});
+
+
+// Below are the functions that handle actual exporting:
+// getSVGString ( svgNode ) and svgString2Image( svgString, width, height, format, callback )
+function getSVGString( svgNode ) {
+	svgNode.setAttribute('xlink', 'http://www.w3.org/1999/xlink');
+	var cssStyleText = getCSSStyles( svgNode );
+	appendCSS( cssStyleText, svgNode );
+
+	var serializer = new XMLSerializer();
+	var svgString = serializer.serializeToString(svgNode);
+	svgString = svgString.replace(/(\w+)?:?xlink=/g, 'xmlns:xlink='); // Fix root xlink without namespace
+	svgString = svgString.replace(/NS\d+:href/g, 'xlink:href'); // Safari NS namespace fix
+
+	return svgString;
+
+	function getCSSStyles( parentElement ) {
+		var selectorTextArr = [];
+
+		// Add Parent element Id and Classes to the list
+		selectorTextArr.push( '#'+parentElement.id );
+		for (var c = 0; c < parentElement.classList.length; c++)
+				if ( !contains('.'+parentElement.classList[c], selectorTextArr) )
+					selectorTextArr.push( '.'+parentElement.classList[c] );
+
+		// Add Children element Ids and Classes to the list
+		var nodes = parentElement.getElementsByTagName("*");
+		for (var i = 0; i < nodes.length; i++) {
+			var id = nodes[i].id;
+			if ( !contains('#'+id, selectorTextArr) )
+				selectorTextArr.push( '#'+id );
+
+			var classes = nodes[i].classList;
+			for (var c = 0; c < classes.length; c++)
+				if ( !contains('.'+classes[c], selectorTextArr) )
+					selectorTextArr.push( '.'+classes[c] );
+		}
+
+		// Extract CSS Rules
+		var extractedCSSText = "";
+		for (var i = 0; i < document.styleSheets.length; i++) {
+			var s = document.styleSheets[i];
+
+			try {
+			    if(!s.cssRules) continue;
+			} catch( e ) {
+		    		if(e.name !== 'SecurityError') throw e; // for Firefox
+		    		continue;
+		    	}
+
+			var cssRules = s.cssRules;
+			for (var r = 0; r < cssRules.length; r++) {
+				if ( contains( cssRules[r].selectorText, selectorTextArr ) )
+					extractedCSSText += cssRules[r].cssText;
+			}
+		}
+
+
+		return extractedCSSText;
+
+		function contains(str,arr) {
+			return arr.indexOf( str ) === -1 ? false : true;
+		}
+
+	}
+
+	function appendCSS( cssText, element ) {
+		var styleElement = document.createElement("style");
+		styleElement.setAttribute("type","text/css");
+		styleElement.innerHTML = cssText;
+		var refNode = element.hasChildNodes() ? element.children[0] : null;
+		element.insertBefore( styleElement, refNode );
+	}
+}
+
+
+function svgString2Image( svgString, width, height, format, callback ) {
+	var format = format ? format : 'png';
+
+	var imgsrc = 'data:image/svg+xml;base64,'+ btoa( unescape( encodeURIComponent( svgString ) ) ); // Convert SVG string to data URL
+
+	var canvas = document.createElement("canvas");
+	var context = canvas.getContext("2d");
+
+	canvas.width = width;
+	canvas.height = height;
+
+	var image = new Image();
+	image.onload = function() {
+		context.clearRect ( 0, 0, width, height );
+		context.drawImage(image, 0, 0, width, height);
+
+		canvas.toBlob( function(blob) {
+			var filesize = Math.round( blob.length/1024 ) + ' KB';
+			if ( callback ) callback( blob, filesize );
+		});
+
+
+	};
+
+	image.src = imgsrc;
 }
 
 },{"esprima":2}],2:[function(require,module,exports){
@@ -6987,5 +7143,4 @@ return /******/ (function(modules) { // webpackBootstrap
 /******/ ])
 });
 ;
-},{}]},{},[1])(1)
-});
+},{}]},{},[1]);

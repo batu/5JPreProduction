@@ -1,6 +1,6 @@
 <html>
   <head>
-    <title>CodeSyntax</title>
+    <title>Force Directed Graph</title>
     <meta charset= "UTF-8">
 
     <!-- YAML parser. -->
@@ -33,6 +33,10 @@
     <script src="https://cdn.rawgit.com/eligrey/canvas-toBlob.js/f1a01896135ab378aa5c0118eadd81da55e698d8/canvas-toBlob.js"></script>
    	<script src="https://cdn.rawgit.com/eligrey/FileSaver.js/e9d941381475b5df8b7d7691013401e171014e89/FileSaver.min.js"></script>
 
+    <!-- Modular parsers and renderers -->
+    <script type="text/javascript" src="ParsersAndRenderers/ast-bundle.js"></script>
+    <script type="text/javascript" src="ParsersAndRenderers/fdg-bundle.js"></script>
+
   </head>
   <body>
     <p>This is the home page for the 5J Web application. </p>
@@ -40,7 +44,15 @@
     <div>
       <button id='saveButton'>Export my D3 visualization to PNG</button>
     </div>
-    <div id="drawArea" style="width:1200px; height:6000px; ">
+    <div>
+      <button id='toggleParserButton'>switch to JSON</button>
+    </div>
+
+    <div>
+      <button id='toggleParseRenderGroup'>switch to AST</button>
+    </div>
+
+    <div id="drawArea" style="width:1200px; height:1200px;">
 
     <script src="bundle.js"></script>
   </body>
