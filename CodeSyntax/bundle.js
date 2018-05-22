@@ -8,7 +8,7 @@
 
 	var ASTstring = 'var x = 5\nif(x < 10){\n	x += 1\n    var b = "My Value"\n}\ntest(b)\n'
 	// Code mirror part
-	var placeHolderText = "hat_1 = brown\nhat_2 = brown\nhat_1 -> hat_2";
+	var placeHolderText = JSONParseString;
 
 	var isJSON = false;
 

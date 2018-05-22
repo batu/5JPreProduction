@@ -1,0 +1,100 @@
+<html>
+  <head>
+    <title>Force Directed Graph</title>
+    <meta charset= "UTF-8">
+
+    <!-- YAML parser. -->
+    <script src="lib/yaml/yaml.js"></script>
+
+    <!-- D3. -->
+    <script src="https://d3js.org/d3.v5.js"></script>
+    <script src="https://d3js.org/d3-force.v1.min.js"></script>
+
+    <!-- Code Mirror. -->
+    <script src="lib/codemirror/codemirror.js"></script>
+    <link rel="stylesheet" href="lib/codemirror.css">
+    <link rel="stylesheet" href="theme/monokai.css">
+    <script src="mode/yaml/yaml.js"></script>
+
+    <!-- AST Traverse. -->
+    <script src="lib/traverse/ast-traverse.js"></script>
+
+
+    <!-- For all the NPM Modules Using Browserify. -->
+    <!--   <script src="lib/browserify/bundle.js"></script>  -->
+
+    <!-- CSS -->
+    <link rel="stylesheet" href="stylesheet.css">
+
+    <!-- Raphael for now -->
+    <script type="text/javascript" src="lib/raphael/raphael-min.js"></script>
+
+    <!-- Blob and Filesaver to, well, save.-->
+    <script src="https://cdn.rawgit.com/eligrey/canvas-toBlob.js/f1a01896135ab378aa5c0118eadd81da55e698d8/canvas-toBlob.js"></script>
+   	<script src="https://cdn.rawgit.com/eligrey/FileSaver.js/e9d941381475b5df8b7d7691013401e171014e89/FileSaver.min.js"></script>
+
+    <!-- Modular parsers and renderers -->
+    <script type="text/javascript" src="ParsersAndRenderers/ast-bundle.js"></script>
+    <script type="text/javascript" src="ParsersAndRenderers/fdg-bundle.js"></script>
+
+    <script type="text/javascript" src="raytracing/sylvester.src.js"></script>
+    <script type="text/javascript" src="raytracing/glUtils.js"></script>
+    <script type="text/javascript" src="raytracing/webgl-path-tracing.js"></script>
+  </head>
+  <body>
+    <p>This is the home page for the 5J Web application. </p>
+    <div id="codeeditor"></div>
+    <div>
+      <button id='saveButton'>Export my D3 visualization to PNG</button>
+    </div>
+    <div>
+      <button id='toggleParserButton'>switch to JSON</button>
+    </div>
+
+    <div>
+      <button id='toggleParseRenderGroup'>switch to AST</button>
+    </div>
+
+    <div id="drawArea" style="width:1200px; height:1200px;">
+      <div id="main">
+        <canvas id="canvas" width="512" height="512"></canvas>
+        <div id="error"><noscript>Please enable JavaScript.</noscript></div>
+
+        <p>
+          <button onclick="javascript:ui.selectLight()">Select Light</button>
+          <button onclick="javascript:ui.addSphere()">Add Sphere</button>
+          <button onclick="javascript:ui.addCube()">Add Cube</button>
+        </p>
+
+        <p>
+          <b>Material:</b>
+          <select id="material">
+            <option value="0" selected>Diffuse</option>
+            <option value="1">Mirror</option>
+            <option value="2">Glossy</option>
+          </select>
+          <span id="glossiness-factor">
+            <br>with glossiness factor: 0 &lt; <input id="glossiness" value="0.6"> &lt; 1
+          </span>
+          <br>
+
+          <b>Environment:</b>
+          <select id="environment">
+            <option value="0" selected>Cornell Box - Yellow and Blue</option>
+            <option value="1">Cornell Box - Red and Green</option>
+          </select>
+        </p>
+
+        <p>
+          <b>Load preset scene:</b>
+          <br><button onclick="javascript:ui.setObjects(makeSphereColumn())">Sphere Column</button>
+          <br><button onclick="javascript:ui.setObjects(makeSpherePyramid())">Sphere Pyramid</button>
+          <br><button onclick="javascript:ui.setObjects(makeSphereAndCube())">Sphere and Cube</button>
+          <br><button onclick="javascript:ui.setObjects(makeCubeAndSpheres())">Cube and Spheres</button>
+          <br><button onclick="javascript:ui.setObjects(makeTableAndChair())">Table and Chair</button>
+          <br><button onclick="javascript:ui.setObjects(makeStacks())">Stacks</button>
+        </p>
+      </div>
+    <script src="bundle.js"></script>
+  </body>
+</html>
