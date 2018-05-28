@@ -79,6 +79,7 @@
 
 		var elem = document.getElementById('toggleParseRenderGroup');
 		if(isAST){
+			elem.innerHTML = "switch to FDG"
 			activeParseFunction = parseAST;
 			activeRenderFunction = renderAST;
 			activeErrorFunction = drawErrorAST;
