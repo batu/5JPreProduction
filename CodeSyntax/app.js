@@ -1,4 +1,6 @@
-var Esprima = require("esprima")
+var fdg = require('./ParsersAndRenderers/fdg.js');
+var ast = require('./ParsersAndRenderers/ast.js');
+
 
 var simpleParseString = "hat_1 = brown\nhat_2 = brown\nhead_1 = teal\nhead_2 = teal\nchin = teal\n\nhat_1 -> hat_2\nhead_1 -> chin\nchin -> head_2\nhead_1 -> hat_1\nhat_2 -> head_2\n\nbody = blue\nbelly = blue\narm_l = blue\narm_r = blue\nhand_l = teal\nhand_r = teal\n\nchin -> body\nbody -> belly\nbody -> arm_l\nbody -> arm_r\narm_r -> hand_r\narm_l -> hand_l\n\npelvis = red\nleg_r = red\nleg_l = red\nfoot_l = teal\nfoot_r = teal\n\nbelly -> pelvis\npelvis -> leg_r\npelvis -> leg_l\nleg_l -> foot_l\nleg_r -> foot_r\n"
 
@@ -12,9 +14,9 @@ var placeHolderText = JSONParseString;
 var isJSON = false;
 
 var isAST = false;
-var activeParseFunction = parseSimpleFDG;
-var activeRenderFunction = renderFDG;
-var activeErrorFunction = drawErrorFDG;
+var activeParseFunction = fdg.parseSimpleFDG;
+var activeRenderFunction = fdg.renderFDG;
+var activeErrorFunction = fdg.drawErrorFDG;
 
 
 var parentElement = parentElement = document.getElementById('drawArea');
@@ -62,13 +64,13 @@ d3.select('#toggleParserButton').on('click', function(){
 		elem.innerHTML = "switch to SimpleParse"
 		localStorage['FDGtext'] = JSONParseString;
 		myCodeMirror.setValue(JSONParseString);
-		activeParseFunction = parseJSONFDG;
+		activeParseFunction = fdg.parseJSONFDG;
 	}else{
 		var elem = document.getElementById('toggleParserButton');
 		elem.innerHTML = "switch to JSON parsing"
 		localStorage['FDGtext'] = simpleParseString;
 		myCodeMirror.setValue(simpleParseString);
-		activeParseFunction = parseSimpleFDG;
+		activeParseFunction = fdg.parseSimpleFDG;
 	}
 	parseAndRender();
 });
@@ -79,9 +81,9 @@ d3.select('#toggleParseRenderGroup').on('click', function(){
 	var elem = document.getElementById('toggleParseRenderGroup');
 	if(isAST){
 		elem.innerHTML = "switch to FDG"
-		activeParseFunction = parseAST;
-		activeRenderFunction = renderAST;
-		activeErrorFunction = drawErrorAST;
+		activeParseFunction = ast.parseAST;
+		activeRenderFunction = ast.renderAST;
+		activeErrorFunction = ast.drawErrorAST;
 		localStorage['FDGtext'] = ASTstring;
 		myCodeMirror.setValue(ASTstring);
 		document.getElementById('toggleParserButton').disabled = true;
@@ -91,14 +93,14 @@ d3.select('#toggleParseRenderGroup').on('click', function(){
 		if(isJSON){
 			localStorage['FDGtext'] = JSONParseString;
 			myCodeMirror.setValue(JSONParseString);
-			activeParseFunction = parseJSONFDG;
+			activeParseFunction = fdg.parseJSONFDG;
 		}else{
 			localStorage['FDGtext'] = JSONParseString;
 			myCodeMirror.setValue(JSONParseString);
-			activeParseFunction = parseJSONFDG;
+			activeParseFunction = fdg.parseJSONFDG;
 		}
-		activeRenderFunction = renderFDG;
-		activeErrorFunction = drawErrorFDG;
+		activeRenderFunction = fdg.renderFDG;
+		activeErrorFunction = fdg.drawErrorFDG;
 	}
 
 	parseAndRender();

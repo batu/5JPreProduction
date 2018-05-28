@@ -1,3 +1,9 @@
+module.exports = {
+	parseAST : parseAST,
+	drawErrorAST : drawErrorAST,
+	renderAST : renderAST
+}
+
 var Esprima = require("esprima")
 
 var fill = '#3AA';
@@ -16,7 +22,7 @@ function parseAST(text){
 	return graph
 }
 
-function drawErrorAst(ast){
+function drawErrorAST(ast){
 
 	var container = "#drawArea"
 
