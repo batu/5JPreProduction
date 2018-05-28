@@ -333,7 +333,7 @@ var nodeFont = { 'font-size': fontSize,
 								 'font-family': 'Arial, Helvetica, sans-serif',
 								 'fill': text };
 
-								 
+
 function parseJSONFDG(text){
 	var graph = JSON.parse(text)
 	return graph
@@ -2303,17 +2303,17 @@ function makeOrtho(left, right, bottom, top, znear, zfar)
 // === Sylvester ===
 // Vector and Matrix mathematics modules for JavaScript
 // Copyright (c) 2007 James Coglan
-// 
+//
 // Permission is hereby granted, free of charge, to any person obtaining
 // a copy of this software and associated documentation files (the "Software"),
 // to deal in the Software without restriction, including without limitation
 // the rights to use, copy, modify, merge, publish, distribute, sublicense,
 // and/or sell copies of the Software, and to permit persons to whom the
 // Software is furnished to do so, subject to the following conditions:
-// 
+//
 // The above copyright notice and this permission notice shall be included
 // in all copies or substantial portions of the Software.
-// 
+//
 // THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS
 // OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
 // FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL
@@ -2369,7 +2369,7 @@ Vector.prototype = {
     });
     return Vector.create(elements);
   },
-  
+
   // Calls the iterator for each element of the vector in turn
   each: function(fn) {
     var n = this.elements.length, k = n, i;
@@ -2528,7 +2528,7 @@ Vector.prototype = {
     return plane.contains(this);
   },
 
-  // Rotates the vector about the given object. The object should be a 
+  // Rotates the vector about the given object. The object should be a
   // point if the vector is 2D, and a line if it is 3D. Be careful with line directions!
   rotate: function(t, obj) {
     var V, R, x, y, z;
@@ -2599,7 +2599,7 @@ Vector.prototype = {
     return this;
   }
 };
-  
+
 // Constructor function
 Vector.create = function(elements) {
   var V = new Vector();
@@ -2921,7 +2921,7 @@ Matrix.prototype = {
     } while (--ni);
     return rank;
   },
-  
+
   rk: function() { return this.rank(); },
 
   // Returns the result of attaching the given argument to the right-hand side of the matrix
@@ -3314,7 +3314,7 @@ Line.prototype = {
   }
 };
 
-  
+
 // Constructor function
 Line.create = function(anchor, direction) {
   var L = new Line();
@@ -3365,7 +3365,7 @@ Plane.prototype = {
     }
     return null;
   },
-  
+
   // Returns true iff the receiver is perpendicular to the argument
   isPerpendicularTo: function(plane) {
     var theta = this.normal.angleFrom(plane.normal);
