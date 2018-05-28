@@ -23,6 +23,24 @@ function parseAST(text){
 	return graph
 }
 
+function getMaxWidth(root_node){
+	var currNodes = [root_node];
+	var nextNodes = [];
+	var maxWidth = 0;
+	while( currNodes.length != 0) {
+		console.log(currNodes);
+		for(var i = 0; i < currNodes.length; i++){
+			for(var j = 0; j < currNodes[i]["children"].length; j++){
+				nextNodes.push(currNodes[i]["children"][j]);
+			}
+	 }
+	 maxWidth = Math.max(nextNodes.length, maxWidth)
+   currNodes = nextNodes
+   nextNodes = []
+	}
+	return maxWidth;
+}
+
 function drawErrorAST(ast){
 
 	var container = "#drawArea"
@@ -166,6 +184,7 @@ function renderAST(ast) {
 	enumerateChildrenForD3Tree(ast, tree);
 	tree = removeEmptyNodes(tree)
 	tree = fixAssignment(tree)
+	tree = fixElse(tree)
 	drawD3fromTree(tree)
 }
 
@@ -217,14 +236,32 @@ function fixAssignment(node){
 	return node
 }
 
+function fixElse(node){
+
+	if(node.parent && (node.parent.text == "If") && (node.text == "" ) ){
+		console.log(node.parent.text);
+		node.text = "Else";
+	}
+
+	if(node["children"].length == 0){
+		return node
+	} else {
+		for (var i = 0; i < node["children"].length; i++) {
+			fixElse(node["children"][i])
+		}
+	}
+	return node
+}
+
 var svg_witdh;
 var svg_height;
 function drawD3fromTree(tree){
+	var max_width = getMaxWidth(tree)
 	var root = d3.hierarchy(tree)
 
 	var radius = 45
 	var y_margin = radius
-	svg_witdh = root.children.length * 400;
+	svg_witdh = max_width * 200;
 	svg_height = root.height * 125 + radius
 	var svg = d3.select(container).append("svg");
 	svg.attr("width", svg_witdh);
@@ -277,7 +314,7 @@ function drawD3fromTree(tree){
 
 }
 
-},{"esprima":4}],2:[function(require,module,exports){
+},{"esprima":7}],2:[function(require,module,exports){
 module.exports = {
 	parseJSONFDG : parseJSONFDG,
 	parseSimpleFDG : parseSimpleFDG,
@@ -462,10 +499,1367 @@ try{
 }
 
 },{}],3:[function(require,module,exports){
+
+function renderPathTracing(list){
+  ui.deleteAll();
+  for (var i = 0; i < list.length; i++){
+    var drawObject = list[i];
+    if(drawObject.type == "cube"){
+      ui.addCubeAtLocation(drawObject.x,
+        drawObject.y,
+        drawObject.z,
+        drawObject.r);
+      }else if(drawObject.type == "sphere"){
+        ui.addSphereAtLocation(drawObject.x,
+          drawObject.y,
+          drawObject.z,
+          drawObject.r);
+        }
+      }
+    }
+
+
+UI.prototype.deleteAll = function() {
+  this.objects = [];
+  this.objects.splice(0, 0, new Light());
+  this.renderer.setObjects(this.objects);
+};
+
+UI.prototype.addSphereAtLocation = function(x, y, z, r) {
+  this.objects.push(new Sphere(Vector.create([x, y, z]), r, nextObjectId++));
+  this.renderer.setObjects(this.objects);
+};
+
+UI.prototype.addCubeAtLocation = function(x, y, z, r) {
+  this.objects.push(new Cube(Vector.create([x - r, y - r, z - r]), Vector.create([x + r, y + r, z + r]), nextObjectId++));
+  this.renderer.setObjects(this.objects);
+};
+
+
+////////////////////////////////////////////////////////////////////////////////
+// Pre Written Ray Tracing Code.
+// Someone please teach me a better way to do this...
+////////////////////////////////////////////////////////////////////////////////
+
+
+/*
+ WebGL Path Tracing (http://madebyevan.com/webgl-path-tracing/)
+ License: MIT License (see below)
+
+ Copyright (c) 2010 Evan Wallace
+
+ Permission is hereby granted, free of charge, to any person
+ obtaining a copy of this software and associated documentation
+ files (the "Software"), to deal in the Software without
+ restriction, including without limitation the rights to use,
+ copy, modify, merge, publish, distribute, sublicense, and/or sell
+ copies of the Software, and to permit persons to whom the
+ Software is furnished to do so, subject to the following
+ conditions:
+
+ The above copyright notice and this permission notice shall be
+ included in all copies or substantial portions of the Software.
+
+ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
+ EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES
+ OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND
+ NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT
+ HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY,
+ WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+ FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR
+ OTHER DEALINGS IN THE SOFTWARE.
+*/
+
+////////////////////////////////////////////////////////////////////////////////
+// shader strings
+////////////////////////////////////////////////////////////////////////////////
+
+// vertex shader for drawing a textured quad
+var renderVertexSource =
+' attribute vec3 vertex;' +
+' varying vec2 texCoord;' +
+' void main() {' +
+'   texCoord = vertex.xy * 0.5 + 0.5;' +
+'   gl_Position = vec4(vertex, 1.0);' +
+' }';
+
+// fragment shader for drawing a textured quad
+var renderFragmentSource =
+' precision highp float;' +
+' varying vec2 texCoord;' +
+' uniform sampler2D texture;' +
+' void main() {' +
+'   gl_FragColor = texture2D(texture, texCoord);' +
+' }';
+
+// vertex shader for drawing a line
+var lineVertexSource =
+' attribute vec3 vertex;' +
+' uniform vec3 cubeMin;' +
+' uniform vec3 cubeMax;' +
+' uniform mat4 modelviewProjection;' +
+' void main() {' +
+'   gl_Position = modelviewProjection * vec4(mix(cubeMin, cubeMax, vertex), 1.0);' +
+' }';
+
+// fragment shader for drawing a line
+var lineFragmentSource =
+' precision highp float;' +
+' void main() {' +
+'   gl_FragColor = vec4(1.0);' +
+' }';
+
+// constants for the shaders
+var bounces = '5';
+var epsilon = '0.0001';
+var infinity = '10000.0';
+var lightSize = 0.1;
+var lightVal = 0.5;
+
+// vertex shader, interpolate ray per-pixel
+var tracerVertexSource =
+' attribute vec3 vertex;' +
+' uniform vec3 eye, ray00, ray01, ray10, ray11;' +
+' varying vec3 initialRay;' +
+' void main() {' +
+'   vec2 percent = vertex.xy * 0.5 + 0.5;' +
+'   initialRay = mix(mix(ray00, ray01, percent.y), mix(ray10, ray11, percent.y), percent.x);' +
+'   gl_Position = vec4(vertex, 1.0);' +
+' }';
+
+// start of fragment shader
+var tracerFragmentSourceHeader =
+' precision highp float;' +
+' uniform vec3 eye;' +
+' varying vec3 initialRay;' +
+' uniform float textureWeight;' +
+' uniform float timeSinceStart;' +
+' uniform sampler2D texture;' +
+' uniform float glossiness;' +
+' vec3 roomCubeMin = vec3(-1.0, -1.0, -1.0);' +
+' vec3 roomCubeMax = vec3(1.0, 1.0, 1.0);';
+
+// compute the near and far intersections of the cube (stored in the x and y components) using the slab method
+// no intersection means vec.x > vec.y (really tNear > tFar)
+var intersectCubeSource =
+' vec2 intersectCube(vec3 origin, vec3 ray, vec3 cubeMin, vec3 cubeMax) {' +
+'   vec3 tMin = (cubeMin - origin) / ray;' +
+'   vec3 tMax = (cubeMax - origin) / ray;' +
+'   vec3 t1 = min(tMin, tMax);' +
+'   vec3 t2 = max(tMin, tMax);' +
+'   float tNear = max(max(t1.x, t1.y), t1.z);' +
+'   float tFar = min(min(t2.x, t2.y), t2.z);' +
+'   return vec2(tNear, tFar);' +
+' }';
+
+// given that hit is a point on the cube, what is the surface normal?
+// TODO: do this with fewer branches
+var normalForCubeSource =
+' vec3 normalForCube(vec3 hit, vec3 cubeMin, vec3 cubeMax)' +
+' {' +
+'   if(hit.x < cubeMin.x + ' + epsilon + ') return vec3(-1.0, 0.0, 0.0);' +
+'   else if(hit.x > cubeMax.x - ' + epsilon + ') return vec3(1.0, 0.0, 0.0);' +
+'   else if(hit.y < cubeMin.y + ' + epsilon + ') return vec3(0.0, -1.0, 0.0);' +
+'   else if(hit.y > cubeMax.y - ' + epsilon + ') return vec3(0.0, 1.0, 0.0);' +
+'   else if(hit.z < cubeMin.z + ' + epsilon + ') return vec3(0.0, 0.0, -1.0);' +
+'   else return vec3(0.0, 0.0, 1.0);' +
+' }';
+
+// compute the near intersection of a sphere
+// no intersection returns a value of +infinity
+var intersectSphereSource =
+' float intersectSphere(vec3 origin, vec3 ray, vec3 sphereCenter, float sphereRadius) {' +
+'   vec3 toSphere = origin - sphereCenter;' +
+'   float a = dot(ray, ray);' +
+'   float b = 2.0 * dot(toSphere, ray);' +
+'   float c = dot(toSphere, toSphere) - sphereRadius*sphereRadius;' +
+'   float discriminant = b*b - 4.0*a*c;' +
+'   if(discriminant > 0.0) {' +
+'     float t = (-b - sqrt(discriminant)) / (2.0 * a);' +
+'     if(t > 0.0) return t;' +
+'   }' +
+'   return ' + infinity + ';' +
+' }';
+
+// given that hit is a point on the sphere, what is the surface normal?
+var normalForSphereSource =
+' vec3 normalForSphere(vec3 hit, vec3 sphereCenter, float sphereRadius) {' +
+'   return (hit - sphereCenter) / sphereRadius;' +
+' }';
+
+// use the fragment position for randomness
+var randomSource =
+' float random(vec3 scale, float seed) {' +
+'   return fract(sin(dot(gl_FragCoord.xyz + seed, scale)) * 43758.5453 + seed);' +
+' }';
+
+// random cosine-weighted distributed vector
+// from http://www.rorydriscoll.com/2009/01/07/better-sampling/
+var cosineWeightedDirectionSource =
+' vec3 cosineWeightedDirection(float seed, vec3 normal) {' +
+'   float u = random(vec3(12.9898, 78.233, 151.7182), seed);' +
+'   float v = random(vec3(63.7264, 10.873, 623.6736), seed);' +
+'   float r = sqrt(u);' +
+'   float angle = 6.283185307179586 * v;' +
+    // compute basis from normal
+'   vec3 sdir, tdir;' +
+'   if (abs(normal.x)<.5) {' +
+'     sdir = cross(normal, vec3(1,0,0));' +
+'   } else {' +
+'     sdir = cross(normal, vec3(0,1,0));' +
+'   }' +
+'   tdir = cross(normal, sdir);' +
+'   return r*cos(angle)*sdir + r*sin(angle)*tdir + sqrt(1.-u)*normal;' +
+' }';
+
+// random normalized vector
+var uniformlyRandomDirectionSource =
+' vec3 uniformlyRandomDirection(float seed) {' +
+'   float u = random(vec3(12.9898, 78.233, 151.7182), seed);' +
+'   float v = random(vec3(63.7264, 10.873, 623.6736), seed);' +
+'   float z = 1.0 - 2.0 * u;' +
+'   float r = sqrt(1.0 - z * z);' +
+'   float angle = 6.283185307179586 * v;' +
+'   return vec3(r * cos(angle), r * sin(angle), z);' +
+' }';
+
+// random vector in the unit sphere
+// note: this is probably not statistically uniform, saw raising to 1/3 power somewhere but that looks wrong?
+var uniformlyRandomVectorSource =
+' vec3 uniformlyRandomVector(float seed) {' +
+'   return uniformlyRandomDirection(seed) * sqrt(random(vec3(36.7539, 50.3658, 306.2759), seed));' +
+' }';
+
+// compute specular lighting contribution
+var specularReflection =
+' vec3 reflectedLight = normalize(reflect(light - hit, normal));' +
+' specularHighlight = max(0.0, dot(reflectedLight, normalize(hit - origin)));';
+
+// update ray using normal and bounce according to a diffuse reflection
+var newDiffuseRay =
+' ray = cosineWeightedDirection(timeSinceStart + float(bounce), normal);';
+
+// update ray using normal according to a specular reflection
+var newReflectiveRay =
+' ray = reflect(ray, normal);' +
+  specularReflection +
+' specularHighlight = 2.0 * pow(specularHighlight, 20.0);';
+
+// update ray using normal and bounce according to a glossy reflection
+var newGlossyRay =
+' ray = normalize(reflect(ray, normal)) + uniformlyRandomVector(timeSinceStart + float(bounce)) * glossiness;' +
+  specularReflection +
+' specularHighlight = pow(specularHighlight, 3.0);';
+
+var yellowBlueCornellBox =
+' if(hit.x < -0.9999) surfaceColor = vec3(0.1, 0.5, 1.0);' + // blue
+' else if(hit.x > 0.9999) surfaceColor = vec3(1.0, 0.9, 0.1);'; // yellow
+
+var redGreenCornellBox =
+' if(hit.x < -0.9999) surfaceColor = vec3(1.0, 0.3, 0.1);' + // red
+' else if(hit.x > 0.9999) surfaceColor = vec3(0.3, 1.0, 0.1);'; // green
+
+function makeShadow(objects) {
+  return '' +
+' float shadow(vec3 origin, vec3 ray) {' +
+    concat(objects, function(o){ return o.getShadowTestCode(); }) +
+'   return 1.0;' +
+' }';
+}
+
+function makeCalculateColor(objects) {
+  return '' +
+' vec3 calculateColor(vec3 origin, vec3 ray, vec3 light) {' +
+'   vec3 colorMask = vec3(1.0);' +
+'   vec3 accumulatedColor = vec3(0.0);' +
+
+    // main raytracing loop
+'   for(int bounce = 0; bounce < ' + bounces + '; bounce++) {' +
+      // compute the intersection with everything
+'     vec2 tRoom = intersectCube(origin, ray, roomCubeMin, roomCubeMax);' +
+      concat(objects, function(o){ return o.getIntersectCode(); }) +
+
+      // find the closest intersection
+'     float t = ' + infinity + ';' +
+'     if(tRoom.x < tRoom.y) t = tRoom.y;' +
+      concat(objects, function(o){ return o.getMinimumIntersectCode(); }) +
+
+      // info about hit
+'     vec3 hit = origin + ray * t;' +
+'     vec3 surfaceColor = vec3(0.75);' +
+'     float specularHighlight = 0.0;' +
+'     vec3 normal;' +
+
+      // calculate the normal (and change wall color)
+'     if(t == tRoom.y) {' +
+'       normal = -normalForCube(hit, roomCubeMin, roomCubeMax);' +
+        [yellowBlueCornellBox, redGreenCornellBox][environment] +
+        newDiffuseRay +
+'     } else if(t == ' + infinity + ') {' +
+'       break;' +
+'     } else {' +
+'       if(false) ;' + // hack to discard the first 'else' in 'else if'
+        concat(objects, function(o){ return o.getNormalCalculationCode(); }) +
+        [newDiffuseRay, newReflectiveRay, newGlossyRay][material] +
+'     }' +
+
+      // compute diffuse lighting contribution
+'     vec3 toLight = light - hit;' +
+'     float diffuse = max(0.0, dot(normalize(toLight), normal));' +
+
+      // trace a shadow ray to the light
+'     float shadowIntensity = shadow(hit + normal * ' + epsilon + ', toLight);' +
+
+      // do light bounce
+'     colorMask *= surfaceColor;' +
+'     accumulatedColor += colorMask * (' + lightVal + ' * diffuse * shadowIntensity);' +
+'     accumulatedColor += colorMask * specularHighlight * shadowIntensity;' +
+
+      // calculate next origin
+'     origin = hit;' +
+'   }' +
+
+'   return accumulatedColor;' +
+' }';
+}
+
+function makeMain() {
+  return '' +
+' void main() {' +
+'   vec3 newLight = light + uniformlyRandomVector(timeSinceStart - 53.0) * ' + lightSize + ';' +
+'   vec3 texture = texture2D(texture, gl_FragCoord.xy / 512.0).rgb;' +
+'   gl_FragColor = vec4(mix(calculateColor(eye, initialRay, newLight), texture, textureWeight), 1.0);' +
+' }';
+}
+
+function makeTracerFragmentSource(objects) {
+  return tracerFragmentSourceHeader +
+  concat(objects, function(o){ return o.getGlobalCode(); }) +
+  intersectCubeSource +
+  normalForCubeSource +
+  intersectSphereSource +
+  normalForSphereSource +
+  randomSource +
+  cosineWeightedDirectionSource +
+  uniformlyRandomDirectionSource +
+  uniformlyRandomVectorSource +
+  makeShadow(objects) +
+  makeCalculateColor(objects) +
+  makeMain();
+}
+
+////////////////////////////////////////////////////////////////////////////////
+// utility functions
+////////////////////////////////////////////////////////////////////////////////
+
+function getEyeRay(matrix, x, y) {
+  return matrix.multiply(Vector.create([x, y, 0, 1])).divideByW().ensure3().subtract(eye);
+}
+
+function setUniforms(program, uniforms) {
+  for(var name in uniforms) {
+    var value = uniforms[name];
+    var location = gl.getUniformLocation(program, name);
+    if(location == null) continue;
+    if(value instanceof Vector) {
+      gl.uniform3fv(location, new Float32Array([value.elements[0], value.elements[1], value.elements[2]]));
+    } else if(value instanceof Matrix) {
+      gl.uniformMatrix4fv(location, false, new Float32Array(value.flatten()));
+    } else {
+      gl.uniform1f(location, value);
+    }
+  }
+}
+
+function concat(objects, func) {
+  var text = '';
+  for(var i = 0; i < objects.length; i++) {
+    text += func(objects[i]);
+  }
+  return text;
+}
+
+Vector.prototype.ensure3 = function() {
+  return Vector.create([this.elements[0], this.elements[1], this.elements[2]]);
+};
+
+Vector.prototype.ensure4 = function(w) {
+  return Vector.create([this.elements[0], this.elements[1], this.elements[2], w]);
+};
+
+Vector.prototype.divideByW = function() {
+  var w = this.elements[this.elements.length - 1];
+  var newElements = [];
+  for(var i = 0; i < this.elements.length; i++) {
+    newElements.push(this.elements[i] / w);
+  }
+  return Vector.create(newElements);
+};
+
+Vector.prototype.componentDivide = function(vector) {
+  if(this.elements.length != vector.elements.length) {
+    return null;
+  }
+  var newElements = [];
+  for(var i = 0; i < this.elements.length; i++) {
+    newElements.push(this.elements[i] / vector.elements[i]);
+  }
+  return Vector.create(newElements);
+};
+
+Vector.min = function(a, b) {
+  if(a.length != b.length) {
+    return null;
+  }
+  var newElements = [];
+  for(var i = 0; i < a.elements.length; i++) {
+    newElements.push(Math.min(a.elements[i], b.elements[i]));
+  }
+  return Vector.create(newElements);
+};
+
+Vector.max = function(a, b) {
+  if(a.length != b.length) {
+    return null;
+  }
+  var newElements = [];
+  for(var i = 0; i < a.elements.length; i++) {
+    newElements.push(Math.max(a.elements[i], b.elements[i]));
+  }
+  return Vector.create(newElements);
+};
+
+Vector.prototype.minComponent = function() {
+  var value = Number.MAX_VALUE;
+  for(var i = 0; i < this.elements.length; i++) {
+    value = Math.min(value, this.elements[i]);
+  }
+  return value;
+};
+
+Vector.prototype.maxComponent = function() {
+  var value = -Number.MAX_VALUE;
+  for(var i = 0; i < this.elements.length; i++) {
+    value = Math.max(value, this.elements[i]);
+  }
+  return value;
+};
+
+function compileSource(source, type) {
+  var shader = gl.createShader(type);
+  gl.shaderSource(shader, source);
+  gl.compileShader(shader);
+  if(!gl.getShaderParameter(shader, gl.COMPILE_STATUS)) {
+    throw 'compile error: ' + gl.getShaderInfoLog(shader);
+  }
+  return shader;
+}
+
+function compileShader(vertexSource, fragmentSource) {
+  var shaderProgram = gl.createProgram();
+  gl.attachShader(shaderProgram, compileSource(vertexSource, gl.VERTEX_SHADER));
+  gl.attachShader(shaderProgram, compileSource(fragmentSource, gl.FRAGMENT_SHADER));
+  gl.linkProgram(shaderProgram);
+  if(!gl.getProgramParameter(shaderProgram, gl.LINK_STATUS)) {
+    throw 'link error: ' + gl.getProgramInfoLog(shaderProgram);
+  }
+  return shaderProgram;
+}
+
+////////////////////////////////////////////////////////////////////////////////
+// class Sphere
+////////////////////////////////////////////////////////////////////////////////
+
+function Sphere(center, radius, id) {
+  this.center = center;
+  this.radius = radius;
+  this.centerStr = 'sphereCenter' + id;
+  this.radiusStr = 'sphereRadius' + id;
+  this.intersectStr = 'tSphere' + id;
+  this.temporaryTranslation = Vector.create([0, 0, 0]);
+}
+
+Sphere.prototype.getGlobalCode = function() {
+  return '' +
+' uniform vec3 ' + this.centerStr + ';' +
+' uniform float ' + this.radiusStr + ';';
+};
+
+Sphere.prototype.getIntersectCode = function() {
+  return '' +
+' float ' + this.intersectStr + ' = intersectSphere(origin, ray, ' + this.centerStr + ', ' + this.radiusStr + ');';
+};
+
+Sphere.prototype.getShadowTestCode = function() {
+  return '' +
+  this.getIntersectCode() +
+' if(' + this.intersectStr + ' < 1.0) return 0.0;';
+};
+
+Sphere.prototype.getMinimumIntersectCode = function() {
+  return '' +
+' if(' + this.intersectStr + ' < t) t = ' + this.intersectStr + ';';
+};
+
+Sphere.prototype.getNormalCalculationCode = function() {
+  return '' +
+' else if(t == ' + this.intersectStr + ') normal = normalForSphere(hit, ' + this.centerStr + ', ' + this.radiusStr + ');';
+};
+
+Sphere.prototype.setUniforms = function(renderer) {
+  renderer.uniforms[this.centerStr] = this.center.add(this.temporaryTranslation);
+  renderer.uniforms[this.radiusStr] = this.radius;
+};
+
+Sphere.prototype.temporaryTranslate = function(translation) {
+  this.temporaryTranslation = translation;
+};
+
+Sphere.prototype.translate = function(translation) {
+  this.center = this.center.add(translation);
+};
+
+Sphere.prototype.getMinCorner = function() {
+  return this.center.add(this.temporaryTranslation).subtract(Vector.create([this.radius, this.radius, this.radius]));
+};
+
+Sphere.prototype.getMaxCorner = function() {
+  return this.center.add(this.temporaryTranslation).add(Vector.create([this.radius, this.radius, this.radius]));
+};
+
+Sphere.prototype.intersect = function(origin, ray) {
+  return Sphere.intersect(origin, ray, this.center.add(this.temporaryTranslation), this.radius);
+};
+
+Sphere.intersect = function(origin, ray, center, radius) {
+  var toSphere = origin.subtract(center);
+  var a = ray.dot(ray);
+  var b = 2*toSphere.dot(ray);
+  var c = toSphere.dot(toSphere) - radius*radius;
+  var discriminant = b*b - 4*a*c;
+  if(discriminant > 0) {
+    var t = (-b - Math.sqrt(discriminant)) / (2*a);
+    if(t > 0) {
+      return t;
+    }
+  }
+  return Number.MAX_VALUE;
+};
+
+////////////////////////////////////////////////////////////////////////////////
+// class Cube
+////////////////////////////////////////////////////////////////////////////////
+
+function Cube(minCorner, maxCorner, id) {
+  this.minCorner = minCorner;
+  this.maxCorner = maxCorner;
+  this.minStr = 'cubeMin' + id;
+  this.maxStr = 'cubeMax' + id;
+  this.intersectStr = 'tCube' + id;
+  this.temporaryTranslation = Vector.create([0, 0, 0]);
+}
+
+Cube.prototype.getGlobalCode = function() {
+  return '' +
+' uniform vec3 ' + this.minStr + ';' +
+' uniform vec3 ' + this.maxStr + ';';
+};
+
+Cube.prototype.getIntersectCode = function() {
+  return '' +
+' vec2 ' + this.intersectStr + ' = intersectCube(origin, ray, ' + this.minStr + ', ' + this.maxStr + ');';
+};
+
+Cube.prototype.getShadowTestCode = function() {
+  return '' +
+  this.getIntersectCode() +
+' if(' + this.intersectStr + '.x > 0.0 && ' + this.intersectStr + '.x < 1.0 && ' + this.intersectStr + '.x < ' + this.intersectStr + '.y) return 0.0;';
+};
+
+Cube.prototype.getMinimumIntersectCode = function() {
+  return '' +
+' if(' + this.intersectStr + '.x > 0.0 && ' + this.intersectStr + '.x < ' + this.intersectStr + '.y && ' + this.intersectStr + '.x < t) t = ' + this.intersectStr + '.x;';
+};
+
+Cube.prototype.getNormalCalculationCode = function() {
+  return '' +
+  // have to compare intersectStr.x < intersectStr.y otherwise two coplanar
+  // cubes will look wrong (one cube will "steal" the hit from the other)
+' else if(t == ' + this.intersectStr + '.x && ' + this.intersectStr + '.x < ' + this.intersectStr + '.y) normal = normalForCube(hit, ' + this.minStr + ', ' + this.maxStr + ');';
+};
+
+Cube.prototype.setUniforms = function(renderer) {
+  renderer.uniforms[this.minStr] = this.getMinCorner();
+  renderer.uniforms[this.maxStr] = this.getMaxCorner();
+};
+
+Cube.prototype.temporaryTranslate = function(translation) {
+  this.temporaryTranslation = translation;
+};
+
+Cube.prototype.translate = function(translation) {
+  this.minCorner = this.minCorner.add(translation);
+  this.maxCorner = this.maxCorner.add(translation);
+};
+
+Cube.prototype.getMinCorner = function() {
+  return this.minCorner.add(this.temporaryTranslation);
+};
+
+Cube.prototype.getMaxCorner = function() {
+  return this.maxCorner.add(this.temporaryTranslation);
+};
+
+Cube.prototype.intersect = function(origin, ray) {
+  return Cube.intersect(origin, ray, this.getMinCorner(), this.getMaxCorner());
+};
+
+Cube.intersect = function(origin, ray, cubeMin, cubeMax) {
+  var tMin = cubeMin.subtract(origin).componentDivide(ray);
+  var tMax = cubeMax.subtract(origin).componentDivide(ray);
+  var t1 = Vector.min(tMin, tMax);
+  var t2 = Vector.max(tMin, tMax);
+  var tNear = t1.maxComponent();
+  var tFar = t2.minComponent();
+  if(tNear > 0 && tNear < tFar) {
+    return tNear;
+  }
+  return Number.MAX_VALUE;
+};
+
+////////////////////////////////////////////////////////////////////////////////
+// class Light
+////////////////////////////////////////////////////////////////////////////////
+
+function Light() {
+  this.temporaryTranslation = Vector.create([0, 0, 0]);
+}
+
+Light.prototype.getGlobalCode = function() {
+  return 'uniform vec3 light;';
+};
+
+Light.prototype.getIntersectCode = function() {
+  return '';
+};
+
+Light.prototype.getShadowTestCode = function() {
+  return '';
+};
+
+Light.prototype.getMinimumIntersectCode = function() {
+  return '';
+};
+
+Light.prototype.getNormalCalculationCode = function() {
+  return '';
+};
+
+Light.prototype.setUniforms = function(renderer) {
+  renderer.uniforms.light = light.add(this.temporaryTranslation);
+};
+
+Light.clampPosition = function(position) {
+  for(var i = 0; i < position.elements.length; i++) {
+    position.elements[i] = Math.max(lightSize - 1, Math.min(1 - lightSize, position.elements[i]));
+  }
+};
+
+Light.prototype.temporaryTranslate = function(translation) {
+  var tempLight = light.add(translation);
+  Light.clampPosition(tempLight);
+  this.temporaryTranslation = tempLight.subtract(light);
+};
+
+Light.prototype.translate = function(translation) {
+  light = light.add(translation);
+  Light.clampPosition(light);
+};
+
+Light.prototype.getMinCorner = function() {
+  return light.add(this.temporaryTranslation).subtract(Vector.create([lightSize, lightSize, lightSize]));
+};
+
+Light.prototype.getMaxCorner = function() {
+  return light.add(this.temporaryTranslation).add(Vector.create([lightSize, lightSize, lightSize]));
+};
+
+Light.prototype.intersect = function(origin, ray) {
+  return Number.MAX_VALUE;
+};
+
+////////////////////////////////////////////////////////////////////////////////
+// class PathTracer
+////////////////////////////////////////////////////////////////////////////////
+
+function PathTracer() {
+  var vertices = [
+    -1, -1,
+    -1, +1,
+    +1, -1,
+    +1, +1
+  ];
+
+  // create vertex buffer
+  this.vertexBuffer = gl.createBuffer();
+  gl.bindBuffer(gl.ARRAY_BUFFER, this.vertexBuffer);
+  gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(vertices), gl.STATIC_DRAW);
+
+  // create framebuffer
+  this.framebuffer = gl.createFramebuffer();
+
+  // create textures
+  var type = gl.getExtension('OES_texture_float') ? gl.FLOAT : gl.UNSIGNED_BYTE;
+  this.textures = [];
+  for(var i = 0; i < 2; i++) {
+      this.textures.push(gl.createTexture());
+    gl.bindTexture(gl.TEXTURE_2D, this.textures[i]);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST);
+    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGB, 512, 512, 0, gl.RGB, type, null);
+  }
+  gl.bindTexture(gl.TEXTURE_2D, null);
+
+  // create render shader
+  this.renderProgram = compileShader(renderVertexSource, renderFragmentSource);
+  this.renderVertexAttribute = gl.getAttribLocation(this.renderProgram, 'vertex');
+  gl.enableVertexAttribArray(this.renderVertexAttribute);
+
+  // objects and shader will be filled in when setObjects() is called
+  this.objects = [];
+  this.sampleCount = 0;
+  this.tracerProgram = null;
+}
+
+PathTracer.prototype.setObjects = function(objects) {
+  this.uniforms = {};
+  this.sampleCount = 0;
+  this.objects = objects;
+
+  // create tracer shader
+  if(this.tracerProgram != null) {
+    gl.deleteProgram(this.shaderProgram);
+  }
+  this.tracerProgram = compileShader(tracerVertexSource, makeTracerFragmentSource(objects));
+  this.tracerVertexAttribute = gl.getAttribLocation(this.tracerProgram, 'vertex');
+  gl.enableVertexAttribArray(this.tracerVertexAttribute);
+};
+
+PathTracer.prototype.update = function(matrix, timeSinceStart) {
+  // calculate uniforms
+  for(var i = 0; i < this.objects.length; i++) {
+    this.objects[i].setUniforms(this);
+  }
+  this.uniforms.eye = eye;
+  this.uniforms.glossiness = glossiness;
+  this.uniforms.ray00 = getEyeRay(matrix, -1, -1);
+  this.uniforms.ray01 = getEyeRay(matrix, -1, +1);
+  this.uniforms.ray10 = getEyeRay(matrix, +1, -1);
+  this.uniforms.ray11 = getEyeRay(matrix, +1, +1);
+  this.uniforms.timeSinceStart = timeSinceStart;
+  this.uniforms.textureWeight = this.sampleCount / (this.sampleCount + 1);
+
+  // set uniforms
+  gl.useProgram(this.tracerProgram);
+  setUniforms(this.tracerProgram, this.uniforms);
+
+  // render to texture
+  gl.useProgram(this.tracerProgram);
+  gl.bindTexture(gl.TEXTURE_2D, this.textures[0]);
+  gl.bindBuffer(gl.ARRAY_BUFFER, this.vertexBuffer);
+  gl.bindFramebuffer(gl.FRAMEBUFFER, this.framebuffer);
+  gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, this.textures[1], 0);
+  gl.vertexAttribPointer(this.tracerVertexAttribute, 2, gl.FLOAT, false, 0, 0);
+  gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
+  gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+
+  // ping pong textures
+  this.textures.reverse();
+  this.sampleCount++;
+};
+
+PathTracer.prototype.render = function() {
+  gl.useProgram(this.renderProgram);
+  gl.bindTexture(gl.TEXTURE_2D, this.textures[0]);
+  gl.bindBuffer(gl.ARRAY_BUFFER, this.vertexBuffer);
+  gl.vertexAttribPointer(this.renderVertexAttribute, 2, gl.FLOAT, false, 0, 0);
+  gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
+};
+
+////////////////////////////////////////////////////////////////////////////////
+// class Renderer
+////////////////////////////////////////////////////////////////////////////////
+
+function Renderer() {
+  var vertices = [
+    0, 0, 0,
+    1, 0, 0,
+    0, 1, 0,
+    1, 1, 0,
+    0, 0, 1,
+    1, 0, 1,
+    0, 1, 1,
+    1, 1, 1
+  ];
+  var indices = [
+    0, 1, 1, 3, 3, 2, 2, 0,
+    4, 5, 5, 7, 7, 6, 6, 4,
+    0, 4, 1, 5, 2, 6, 3, 7
+  ];
+
+  // create vertex buffer
+  this.vertexBuffer = gl.createBuffer();
+  gl.bindBuffer(gl.ARRAY_BUFFER, this.vertexBuffer);
+  gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(vertices), gl.STATIC_DRAW);
+
+  // create index buffer
+  this.indexBuffer = gl.createBuffer();
+  gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, this.indexBuffer);
+  gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, new Uint16Array(indices), gl.STATIC_DRAW);
+
+  // create line shader
+  this.lineProgram = compileShader(lineVertexSource, lineFragmentSource);
+  this.vertexAttribute = gl.getAttribLocation(this.lineProgram, 'vertex');
+  gl.enableVertexAttribArray(this.vertexAttribute);
+
+  this.objects = [];
+  this.selectedObject = null;
+  this.pathTracer = new PathTracer();
+}
+
+Renderer.prototype.setObjects = function(objects) {
+  this.objects = objects;
+  this.selectedObject = null;
+  this.pathTracer.setObjects(objects);
+};
+
+Renderer.prototype.update = function(modelviewProjection, timeSinceStart) {
+  var jitter = Matrix.Translation(Vector.create([Math.random() * 2 - 1, Math.random() * 2 - 1, 0]).multiply(1 / 512));
+  var inverse = jitter.multiply(modelviewProjection).inverse();
+  this.modelviewProjection = modelviewProjection;
+  this.pathTracer.update(inverse, timeSinceStart);
+};
+
+Renderer.prototype.render = function() {
+  this.pathTracer.render();
+
+  if(this.selectedObject != null) {
+    gl.useProgram(this.lineProgram);
+    gl.bindTexture(gl.TEXTURE_2D, null);
+    gl.bindBuffer(gl.ARRAY_BUFFER, this.vertexBuffer);
+    gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, this.indexBuffer);
+    gl.vertexAttribPointer(this.vertexAttribute, 3, gl.FLOAT, false, 0, 0);
+    setUniforms(this.lineProgram, {
+      cubeMin: this.selectedObject.getMinCorner(),
+      cubeMax: this.selectedObject.getMaxCorner(),
+      modelviewProjection: this.modelviewProjection
+    });
+    gl.drawElements(gl.LINES, 24, gl.UNSIGNED_SHORT, 0);
+  }
+};
+
+////////////////////////////////////////////////////////////////////////////////
+// class UI
+////////////////////////////////////////////////////////////////////////////////
+
+function UI() {
+  this.renderer = new Renderer();
+  this.moving = false;
+}
+
+UI.prototype.setObjects = function(objects) {
+  this.objects = objects;
+  this.objects.splice(0, 0, new Light());
+  this.renderer.setObjects(this.objects);
+};
+
+UI.prototype.update = function(timeSinceStart) {
+  this.modelview = makeLookAt(eye.elements[0], eye.elements[1], eye.elements[2], 0, 0, 0, 0, 1, 0);
+  this.projection = makePerspective(55, 1, 0.1, 100);
+  this.modelviewProjection = this.projection.multiply(this.modelview);
+  this.renderer.update(this.modelviewProjection, timeSinceStart);
+};
+
+UI.prototype.mouseDown = function(x, y) {
+  var t;
+  var origin = eye;
+  var ray = getEyeRay(this.modelviewProjection.inverse(), (x / 512) * 2 - 1, 1 - (y / 512) * 2);
+
+  // test the selection box first
+  if(this.renderer.selectedObject != null) {
+    var minBounds = this.renderer.selectedObject.getMinCorner();
+    var maxBounds = this.renderer.selectedObject.getMaxCorner();
+    t = Cube.intersect(origin, ray, minBounds, maxBounds);
+
+    if(t < Number.MAX_VALUE) {
+      var hit = origin.add(ray.multiply(t));
+
+      if(Math.abs(hit.elements[0] - minBounds.elements[0]) < 0.001) this.movementNormal = Vector.create([-1, 0, 0]);
+      else if(Math.abs(hit.elements[0] - maxBounds.elements[0]) < 0.001) this.movementNormal = Vector.create([+1, 0, 0]);
+      else if(Math.abs(hit.elements[1] - minBounds.elements[1]) < 0.001) this.movementNormal = Vector.create([0, -1, 0]);
+      else if(Math.abs(hit.elements[1] - maxBounds.elements[1]) < 0.001) this.movementNormal = Vector.create([0, +1, 0]);
+      else if(Math.abs(hit.elements[2] - minBounds.elements[2]) < 0.001) this.movementNormal = Vector.create([0, 0, -1]);
+      else this.movementNormal = Vector.create([0, 0, +1]);
+
+      this.movementDistance = this.movementNormal.dot(hit);
+      this.originalHit = hit;
+      this.moving = true;
+
+      return true;
+    }
+  }
+
+  t = Number.MAX_VALUE;
+  this.renderer.selectedObject = null;
+
+  for(var i = 0; i < this.objects.length; i++) {
+    var objectT = this.objects[i].intersect(origin, ray);
+    if(objectT < t) {
+      t = objectT;
+      this.renderer.selectedObject = this.objects[i];
+    }
+  }
+
+  return (t < Number.MAX_VALUE);
+};
+
+UI.prototype.mouseMove = function(x, y) {
+  if(this.moving) {
+    var origin = eye;
+    var ray = getEyeRay(this.modelviewProjection.inverse(), (x / 512) * 2 - 1, 1 - (y / 512) * 2);
+
+    var t = (this.movementDistance - this.movementNormal.dot(origin)) / this.movementNormal.dot(ray);
+    var hit = origin.add(ray.multiply(t));
+    this.renderer.selectedObject.temporaryTranslate(hit.subtract(this.originalHit));
+
+    // clear the sample buffer
+    this.renderer.pathTracer.sampleCount = 0;
+  }
+};
+
+UI.prototype.mouseUp = function(x, y) {
+  if(this.moving) {
+    var origin = eye;
+    var ray = getEyeRay(this.modelviewProjection.inverse(), (x / 512) * 2 - 1, 1 - (y / 512) * 2);
+
+    var t = (this.movementDistance - this.movementNormal.dot(origin)) / this.movementNormal.dot(ray);
+    var hit = origin.add(ray.multiply(t));
+    this.renderer.selectedObject.temporaryTranslate(Vector.create([0, 0, 0]));
+    this.renderer.selectedObject.translate(hit.subtract(this.originalHit));
+    this.moving = false;
+  }
+};
+
+UI.prototype.render = function() {
+  this.renderer.render();
+};
+
+UI.prototype.selectLight = function() {
+  this.renderer.selectedObject = this.objects[0];
+};
+
+UI.prototype.addSphere = function() {
+  this.objects.push(new Sphere(Vector.create([0, 0, 0]), 0.25, nextObjectId++));
+  this.renderer.setObjects(this.objects);
+};
+
+UI.prototype.addCube = function() {
+  this.objects.push(new Cube(Vector.create([-0.25, -0.25, -0.25]), Vector.create([0.25, 0.25, 0.25]), nextObjectId++));
+  this.renderer.setObjects(this.objects);
+};
+
+UI.prototype.deleteSelection = function() {
+  for(var i = 0; i < this.objects.length; i++) {
+    if(this.renderer.selectedObject == this.objects[i]) {
+      this.objects.splice(i, 1);
+      this.renderer.selectedObject = null;
+      this.renderer.setObjects(this.objects);
+      break;
+    }
+  }
+};
+
+UI.prototype.updateMaterial = function() {
+  var newMaterial = parseInt(document.getElementById('material').value, 10);
+  if(material != newMaterial) {
+    material = newMaterial;
+    this.renderer.setObjects(this.objects);
+  }
+};
+
+UI.prototype.updateEnvironment = function() {
+  var newEnvironment = parseInt(document.getElementById('environment').value, 10);
+  if(environment != newEnvironment) {
+    environment = newEnvironment;
+    this.renderer.setObjects(this.objects);
+  }
+};
+
+UI.prototype.updateGlossiness = function() {
+  var newGlossiness = parseFloat(document.getElementById('glossiness').value);
+  if(isNaN(newGlossiness)) newGlossiness = 0;
+  newGlossiness = Math.max(0, Math.min(1, newGlossiness));
+  if(material == MATERIAL_GLOSSY && glossiness != newGlossiness) {
+    this.renderer.pathTracer.sampleCount = 0;
+  }
+  glossiness = newGlossiness;
+};
+
+////////////////////////////////////////////////////////////////////////////////
+// main program
+////////////////////////////////////////////////////////////////////////////////
+
+
+var gl;
+var ui;
+var error;
+var canvas;
+var inputFocusCount = 0;
+
+var angleX = 0;
+var angleY = 0;
+var zoomZ = 2.5;
+var eye = Vector.create([0, 0, 0]);
+var light = Vector.create([0.4, 0.5, -0.6]);
+
+var nextObjectId = 0;
+
+var MATERIAL_DIFFUSE = 0;
+var MATERIAL_MIRROR = 1;
+var MATERIAL_GLOSSY = 2;
+var material = MATERIAL_DIFFUSE;
+var glossiness = 0.6;
+
+var YELLOW_BLUE_CORNELL_BOX = 0;
+var RED_GREEN_CORNELL_BOX = 1;
+var environment = YELLOW_BLUE_CORNELL_BOX;
+
+function tick(timeSinceStart) {
+  eye.elements[0] = zoomZ * Math.sin(angleY) * Math.cos(angleX);
+  eye.elements[1] = zoomZ * Math.sin(angleX);
+  eye.elements[2] = zoomZ * Math.cos(angleY) * Math.cos(angleX);
+
+  document.getElementById('glossiness-factor').style.display = (material == MATERIAL_GLOSSY) ? 'inline' : 'none';
+
+  ui.updateMaterial();
+  ui.updateGlossiness();
+  ui.updateEnvironment();
+  ui.update(timeSinceStart);
+  ui.render();
+}
+
+function makeStacks() {
+  var objects = [];
+
+  // lower level
+  objects.push(new Cube(Vector.create([-0.5, -0.75, -0.5]), Vector.create([0.5, -0.7, 0.5]), nextObjectId++));
+
+  // further poles
+  objects.push(new Cube(Vector.create([-0.45, -1, -0.45]), Vector.create([-0.4, -0.45, -0.4]), nextObjectId++));
+  objects.push(new Cube(Vector.create([0.4, -1, -0.45]), Vector.create([0.45, -0.45, -0.4]), nextObjectId++));
+  objects.push(new Cube(Vector.create([-0.45, -1, 0.4]), Vector.create([-0.4, -0.45, 0.45]), nextObjectId++));
+  objects.push(new Cube(Vector.create([0.4, -1, 0.4]), Vector.create([0.45, -0.45, 0.45]), nextObjectId++));
+
+  // upper level
+  objects.push(new Cube(Vector.create([-0.3, -0.5, -0.3]), Vector.create([0.3, -0.45, 0.3]), nextObjectId++));
+
+  // closer poles
+  objects.push(new Cube(Vector.create([-0.25, -0.7, -0.25]), Vector.create([-0.2, -0.25, -0.2]), nextObjectId++));
+  objects.push(new Cube(Vector.create([0.2, -0.7, -0.25]), Vector.create([0.25, -0.25, -0.2]), nextObjectId++));
+  objects.push(new Cube(Vector.create([-0.25, -0.7, 0.2]), Vector.create([-0.2, -0.25, 0.25]), nextObjectId++));
+  objects.push(new Cube(Vector.create([0.2, -0.7, 0.2]), Vector.create([0.25, -0.25, 0.25]), nextObjectId++));
+
+  // upper level
+  objects.push(new Cube(Vector.create([-0.25, -0.25, -0.25]), Vector.create([0.25, -0.2, 0.25]), nextObjectId++));
+
+  return objects;
+}
+
+function makeTableAndChair() {
+  var objects = [];
+
+  // table top
+  objects.push(new Cube(Vector.create([-0.5, -0.35, -0.5]), Vector.create([0.3, -0.3, 0.5]), nextObjectId++));
+
+  // table legs
+  objects.push(new Cube(Vector.create([-0.45, -1, -0.45]), Vector.create([-0.4, -0.35, -0.4]), nextObjectId++));
+  objects.push(new Cube(Vector.create([0.2, -1, -0.45]), Vector.create([0.25, -0.35, -0.4]), nextObjectId++));
+  objects.push(new Cube(Vector.create([-0.45, -1, 0.4]), Vector.create([-0.4, -0.35, 0.45]), nextObjectId++));
+  objects.push(new Cube(Vector.create([0.2, -1, 0.4]), Vector.create([0.25, -0.35, 0.45]), nextObjectId++));
+
+  // chair seat
+  objects.push(new Cube(Vector.create([0.3, -0.6, -0.2]), Vector.create([0.7, -0.55, 0.2]), nextObjectId++));
+
+  // chair legs
+  objects.push(new Cube(Vector.create([0.3, -1, -0.2]), Vector.create([0.35, -0.6, -0.15]), nextObjectId++));
+  objects.push(new Cube(Vector.create([0.3, -1, 0.15]), Vector.create([0.35, -0.6, 0.2]), nextObjectId++));
+  objects.push(new Cube(Vector.create([0.65, -1, -0.2]), Vector.create([0.7, 0.1, -0.15]), nextObjectId++));
+  objects.push(new Cube(Vector.create([0.65, -1, 0.15]), Vector.create([0.7, 0.1, 0.2]), nextObjectId++));
+
+  // chair back
+  objects.push(new Cube(Vector.create([0.65, 0.05, -0.15]), Vector.create([0.7, 0.1, 0.15]), nextObjectId++));
+  objects.push(new Cube(Vector.create([0.65, -0.55, -0.09]), Vector.create([0.7, 0.1, -0.03]), nextObjectId++));
+  objects.push(new Cube(Vector.create([0.65, -0.55, 0.03]), Vector.create([0.7, 0.1, 0.09]), nextObjectId++));
+
+  // sphere on table
+  objects.push(new Sphere(Vector.create([-0.1, -0.05, 0]), 0.25, nextObjectId++));
+
+  return objects;
+}
+
+function makeSphereAndCube() {
+  var objects = [];
+  objects.push(new Cube(Vector.create([-0.25, -1, -0.25]), Vector.create([0.25, -0.75, 0.25]), nextObjectId++));
+  objects.push(new Sphere(Vector.create([0, -0.75, 0]), 0.25, nextObjectId++));
+  return objects;
+}
+
+function makeSphereColumn() {
+  var objects = [];
+  objects.push(new Sphere(Vector.create([0, 0.75, 0]), 0.25, nextObjectId++));
+  objects.push(new Sphere(Vector.create([0, 0.25, 0]), 0.25, nextObjectId++));
+  objects.push(new Sphere(Vector.create([0, -0.25, 0]), 0.25, nextObjectId++));
+  objects.push(new Sphere(Vector.create([0, -0.75, 0]), 0.25, nextObjectId++));
+  return objects;
+}
+
+function makeCubeAndSpheres() {
+  var objects = [];
+  objects.push(new Cube(Vector.create([-0.25, -0.25, -0.25]), Vector.create([0.25, 0.25, 0.25]), nextObjectId++));
+  objects.push(new Sphere(Vector.create([-0.25, 0, 0]), 0.25, nextObjectId++));
+  objects.push(new Sphere(Vector.create([+0.25, 0, 0]), 0.25, nextObjectId++));
+  objects.push(new Sphere(Vector.create([0, -0.25, 0]), 0.25, nextObjectId++));
+  objects.push(new Sphere(Vector.create([0, +0.25, 0]), 0.25, nextObjectId++));
+  objects.push(new Sphere(Vector.create([0, 0, -0.25]), 0.25, nextObjectId++));
+  objects.push(new Sphere(Vector.create([0, 0, +0.25]), 0.25, nextObjectId++));
+  return objects;
+}
+
+function makeSpherePyramid() {
+  var root3_over4 = 0.433012701892219;
+  var root3_over6 = 0.288675134594813;
+  var root6_over6 = 0.408248290463863;
+  var objects = [];
+
+  // first level
+  objects.push(new Sphere(Vector.create([-0.5, -0.75, -root3_over6]), 0.25, nextObjectId++));
+  objects.push(new Sphere(Vector.create([0.0, -0.75, -root3_over6]), 0.25, nextObjectId++));
+  objects.push(new Sphere(Vector.create([0.5, -0.75, -root3_over6]), 0.25, nextObjectId++));
+  objects.push(new Sphere(Vector.create([-0.25, -0.75, root3_over4 - root3_over6]), 0.25, nextObjectId++));
+  objects.push(new Sphere(Vector.create([0.25, -0.75, root3_over4 - root3_over6]), 0.25, nextObjectId++));
+  objects.push(new Sphere(Vector.create([0.0, -0.75, 2.0 * root3_over4 - root3_over6]), 0.25, nextObjectId++));
+
+  // second level
+  objects.push(new Sphere(Vector.create([0.0, -0.75 + root6_over6, root3_over6]), 0.25, nextObjectId++));
+  objects.push(new Sphere(Vector.create([-0.25, -0.75 + root6_over6, -0.5 * root3_over6]), 0.25, nextObjectId++));
+  objects.push(new Sphere(Vector.create([0.25, -0.75 + root6_over6, -0.5 * root3_over6]), 0.25, nextObjectId++));
+
+  // third level
+  objects.push(new Sphere(Vector.create([0.0, -0.75 + 2.0 * root6_over6, 0.0]), 0.25, nextObjectId++));
+
+  return objects;
+}
+
+var XNEG = 0, XPOS = 1, YNEG = 2, YPOS = 3, ZNEG = 4, ZPOS = 5;
+
+function addRecursiveSpheresBranch(objects, center, radius, depth, dir) {
+  objects.push(new Sphere(center, radius, nextObjectId++));
+  if(depth--) {
+    if(dir != XNEG) addRecursiveSpheresBranch(objects, center.subtract(Vector.create([radius * 1.5, 0, 0])), radius / 2, depth, XPOS);
+    if(dir != XPOS) addRecursiveSpheresBranch(objects, center.add(Vector.create([radius * 1.5, 0, 0])),      radius / 2, depth, XNEG);
+
+    if(dir != YNEG) addRecursiveSpheresBranch(objects, center.subtract(Vector.create([0, radius * 1.5, 0])), radius / 2, depth, YPOS);
+    if(dir != YPOS) addRecursiveSpheresBranch(objects, center.add(Vector.create([0, radius * 1.5, 0])),      radius / 2, depth, YNEG);
+
+    if(dir != ZNEG) addRecursiveSpheresBranch(objects, center.subtract(Vector.create([0, 0, radius * 1.5])), radius / 2, depth, ZPOS);
+    if(dir != ZPOS) addRecursiveSpheresBranch(objects, center.add(Vector.create([0, 0, radius * 1.5])),      radius / 2, depth, ZNEG);
+  }
+}
+
+function makeRecursiveSpheres() {
+  var objects = [];
+  addRecursiveSpheresBranch(objects, Vector.create([0, 0, 0]), 0.3, 2, -1);
+  return objects;
+}
+
+// window.onload = function() {
+//   gl = null;
+//   error = document.getElementById('error');
+//   canvas = document.getElementById('canvas');
+//   try { gl = canvas.getContext('experimental-webgl'); } catch(e) {}
+//
+//   if(gl) {
+//     error.innerHTML = 'Loading...';
+//
+//     // keep track of whether an <input> is focused or not (will be no only if inputFocusCount == 0)
+//     var inputs = document.getElementsByTagName('input');
+//     for(var i= 0; i < inputs.length; i++) {
+//       inputs[i].onfocus = function(){ inputFocusCount++; };
+//       inputs[i].onblur = function(){ inputFocusCount--; };
+//     }
+//
+//     material = parseInt(document.getElementById('material').value, 10);
+//     environment = parseInt(document.getElementById('environment').value, 10);
+//     ui = new UI();
+//     ui.setObjects(makeSphereColumn());
+//     console.log(module.exports)
+//     var start = new Date();
+//     error.style.zIndex = -1;
+//     setInterval(function(){ tick((new Date() - start) * 0.001); }, 1000 / 60);
+//   } else {
+//     error.innerHTML = 'Your browser does not support WebGL.<br>Please see <a href="http://www.khronos.org/webgl/wiki/Getting_a_WebGL_Implementation">Getting a WebGL Implementation</a>.';
+//   }
+// };
+
+function elementPos(element) {
+  var x = 0, y = 0;
+  while(element.offsetParent) {
+    x += element.offsetLeft;
+    y += element.offsetTop;
+    element = element.offsetParent;
+  }
+  return { x: x, y: y };
+}
+
+function eventPos(event) {
+  return {
+    x: event.clientX + document.body.scrollLeft + document.documentElement.scrollLeft,
+    y: event.clientY + document.body.scrollTop + document.documentElement.scrollTop
+  };
+}
+
+function canvasMousePos(event) {
+  var mousePos = eventPos(event);
+  var canvasPos = elementPos(canvas);
+  return {
+    x: mousePos.x - canvasPos.x,
+    y: mousePos.y - canvasPos.y
+  };
+}
+
+var mouseDown = false, oldX, oldY;
+
+document.onmousedown = function(event) {
+  var mouse = canvasMousePos(event);
+  oldX = mouse.x;
+  oldY = mouse.y;
+
+  if(mouse.x >= 0 && mouse.x < 512 && mouse.y >= 0 && mouse.y < 512) {
+    mouseDown = !ui.mouseDown(mouse.x, mouse.y);
+
+    // disable selection because dragging is used for rotating the camera and moving objects
+    return false;
+  }
+
+  return true;
+};
+
+document.onmousemove = function(event) {
+  var mouse = canvasMousePos(event);
+
+  if(mouseDown) {
+    // update the angles based on how far we moved since last time
+    angleY -= (mouse.x - oldX) * 0.01;
+    angleX += (mouse.y - oldY) * 0.01;
+
+    // don't go upside down
+    angleX = Math.max(angleX, -Math.PI / 2 + 0.01);
+    angleX = Math.min(angleX, Math.PI / 2 - 0.01);
+
+    // clear the sample buffer
+    ui.renderer.pathTracer.sampleCount = 0;
+
+    // remember this coordinate
+    oldX = mouse.x;
+    oldY = mouse.y;
+  } else {
+    var canvasPos = elementPos(canvas);
+    ui.mouseMove(mouse.x, mouse.y);
+  }
+};
+
+document.onmouseup = function(event) {
+  mouseDown = false;
+
+  var mouse = canvasMousePos(event);
+  ui.mouseUp(mouse.x, mouse.y);
+};
+
+document.onkeydown = function(event) {
+  // if there are no <input> elements focused
+  if(inputFocusCount == 0) {
+    // if backspace or delete was pressed
+    if(event.keyCode == 8 || event.keyCode == 46) {
+      ui.deleteSelection();
+
+      // don't let the backspace key go back a page
+      return false;
+    }
+  }
+};
+
+console.log("onload")
+gl = null;
+error = document.getElementById('error');
+canvas = document.getElementById('canvas');
+try { gl = canvas.getContext('experimental-webgl'); } catch(e) {}
+
+if(gl) {
+  error.innerHTML = 'Loading...';
+
+  // keep track of whether an <input> is focused or not (will be no only if inputFocusCount == 0)
+  var inputs = document.getElementsByTagName('input');
+  for(var i= 0; i < inputs.length; i++) {
+    inputs[i].onfocus = function(){ inputFocusCount++; };
+    inputs[i].onblur = function(){ inputFocusCount--; };
+  }
+
+  material = parseInt(document.getElementById('material').value, 10);
+  environment = parseInt(document.getElementById('environment').value, 10);
+  ui = new UI();
+  ui.setObjects(makeSphereColumn());
+  var start = new Date();
+  error.style.zIndex = -1;
+  setInterval(function(){ tick((new Date() - start) * 0.001); }, 1000 / 60);
+} else {
+  error.innerHTML = 'Your browser does not support WebGL.<br>Please see <a href="http://www.khronos.org/webgl/wiki/Getting_a_WebGL_Implementation">Getting a WebGL Implementation</a>.';
+}
+
+module.exports = {
+  renderPathTracing : renderPathTracing,
+}
+
+
+// <br><button onclick="javascript:ui.setObjects(makeSphereColumn())">Sphere Column</button>
+// <br><button onclick="javascript:ui.setObjects(makeSpherePyramid())">Sphere Pyramid</button>
+// <br><button onclick="javascript:ui.setObjects(makeSphereAndCube())">Sphere and Cube</button>
+// <br><button onclick="javascript:ui.setObjects(makeCubeAndSpheres())">Cube and Spheres</button>
+// <br><button onclick="javascript:ui.setObjects(makeTableAndChair())">Table and Chair</button>
+// <br><button onclick="javascript:ui.setObjects(makeStacks())">Stacks</button>
+
+},{}],4:[function(require,module,exports){
 var fdg = require('./ParsersAndRenderers/fdg.js');
 var ast = require('./ParsersAndRenderers/ast.js');
+var pathtracing = require('./ParsersAndRenderers/pathtracing.js');
 
-console.log("Tet")
+console.log(pathtracing);
+var test_list = [ {
+		type: "sphere",
+		x : 0,
+		y : 1,
+		z : 0,
+		r : 0.5
+	},
+	{
+		type: "sphere",
+		x : 0,
+		y : -1,
+		z : 0,
+		r : 0.5
+	}
+]
+
+pathtracing.renderPathTracing(test_list);
 
 var simpleParseString = "hat_1 = brown\nhat_2 = brown\nhead_1 = teal\nhead_2 = teal\nchin = teal\n\nhat_1 -> hat_2\nhead_1 -> chin\nchin -> head_2\nhead_1 -> hat_1\nhat_2 -> head_2\n\nbody = blue\nbelly = blue\narm_l = blue\narm_r = blue\nhand_l = teal\nhand_r = teal\n\nchin -> body\nbody -> belly\nbody -> arm_l\nbody -> arm_r\narm_r -> hand_r\narm_l -> hand_l\n\npelvis = red\nleg_r = red\nleg_l = red\nfoot_l = teal\nfoot_r = teal\n\nbelly -> pelvis\npelvis -> leg_r\npelvis -> leg_l\nleg_l -> foot_l\nleg_r -> foot_r\n"
 
@@ -710,7 +2104,1458 @@ function svgString2Image( svgString, width, height, format, callback ) {
 	image.src = imgsrc;
 }
 
-},{"./ParsersAndRenderers/ast.js":1,"./ParsersAndRenderers/fdg.js":2}],4:[function(require,module,exports){
+},{"./ParsersAndRenderers/ast.js":1,"./ParsersAndRenderers/fdg.js":2,"./ParsersAndRenderers/pathtracing.js":3}],5:[function(require,module,exports){
+// augment Sylvester some
+Matrix.Translation = function (v)
+{
+  if (v.elements.length == 2) {
+    var r = Matrix.I(3);
+    r.elements[2][0] = v.elements[0];
+    r.elements[2][1] = v.elements[1];
+    return r;
+  }
+
+  if (v.elements.length == 3) {
+    var r = Matrix.I(4);
+    r.elements[0][3] = v.elements[0];
+    r.elements[1][3] = v.elements[1];
+    r.elements[2][3] = v.elements[2];
+    return r;
+  }
+
+  throw "Invalid length for Translation";
+}
+
+Matrix.prototype.flatten = function ()
+{
+    var result = [];
+    if (this.elements.length == 0)
+        return [];
+
+
+    for (var j = 0; j < this.elements[0].length; j++)
+        for (var i = 0; i < this.elements.length; i++)
+            result.push(this.elements[i][j]);
+    return result;
+}
+
+Matrix.prototype.ensure4x4 = function()
+{
+    if (this.elements.length == 4 &&
+        this.elements[0].length == 4)
+        return this;
+
+    if (this.elements.length > 4 ||
+        this.elements[0].length > 4)
+        return null;
+
+    for (var i = 0; i < this.elements.length; i++) {
+        for (var j = this.elements[i].length; j < 4; j++) {
+            if (i == j)
+                this.elements[i].push(1);
+            else
+                this.elements[i].push(0);
+        }
+    }
+
+    for (var i = this.elements.length; i < 4; i++) {
+        if (i == 0)
+            this.elements.push([1, 0, 0, 0]);
+        else if (i == 1)
+            this.elements.push([0, 1, 0, 0]);
+        else if (i == 2)
+            this.elements.push([0, 0, 1, 0]);
+        else if (i == 3)
+            this.elements.push([0, 0, 0, 1]);
+    }
+
+    return this;
+};
+
+Matrix.prototype.make3x3 = function()
+{
+    if (this.elements.length != 4 ||
+        this.elements[0].length != 4)
+        return null;
+
+    return Matrix.create([[this.elements[0][0], this.elements[0][1], this.elements[0][2]],
+                          [this.elements[1][0], this.elements[1][1], this.elements[1][2]],
+                          [this.elements[2][0], this.elements[2][1], this.elements[2][2]]]);
+};
+
+Vector.prototype.flatten = function ()
+{
+    return this.elements;
+};
+
+function mht(m) {
+    var s = "";
+    if (m.length == 16) {
+        for (var i = 0; i < 4; i++) {
+            s += "<span style='font-family: monospace'>[" + m[i*4+0].toFixed(4) + "," + m[i*4+1].toFixed(4) + "," + m[i*4+2].toFixed(4) + "," + m[i*4+3].toFixed(4) + "]</span><br>";
+        }
+    } else if (m.length == 9) {
+        for (var i = 0; i < 3; i++) {
+            s += "<span style='font-family: monospace'>[" + m[i*3+0].toFixed(4) + "," + m[i*3+1].toFixed(4) + "," + m[i*3+2].toFixed(4) + "]</font><br>";
+        }
+    } else {
+        return m.toString();
+    }
+    return s;
+}
+
+//
+// gluLookAt
+//
+function makeLookAt(ex, ey, ez,
+                    cx, cy, cz,
+                    ux, uy, uz)
+{
+    var eye = $V([ex, ey, ez]);
+    var center = $V([cx, cy, cz]);
+    var up = $V([ux, uy, uz]);
+
+    var mag;
+
+    var z = eye.subtract(center).toUnitVector();
+    var x = up.cross(z).toUnitVector();
+    var y = z.cross(x).toUnitVector();
+
+    var m = $M([[x.e(1), x.e(2), x.e(3), 0],
+                [y.e(1), y.e(2), y.e(3), 0],
+                [z.e(1), z.e(2), z.e(3), 0],
+                [0, 0, 0, 1]]);
+
+    var t = $M([[1, 0, 0, -ex],
+                [0, 1, 0, -ey],
+                [0, 0, 1, -ez],
+                [0, 0, 0, 1]]);
+    return m.x(t);
+}
+
+//
+// glOrtho
+//
+function makeOrtho(left, right,
+                   bottom, top,
+                   znear, zfar)
+{
+    var tx = -(right+left)/(right-left);
+    var ty = -(top+bottom)/(top-bottom);
+    var tz = -(zfar+znear)/(zfar-znear);
+
+    return $M([[2/(right-left), 0, 0, tx],
+               [0, 2/(top-bottom), 0, ty],
+               [0, 0, -2/(zfar-znear), tz],
+               [0, 0, 0, 1]]);
+}
+
+//
+// gluPerspective
+//
+function makePerspective(fovy, aspect, znear, zfar)
+{
+    var ymax = znear * Math.tan(fovy * Math.PI / 360.0);
+    var ymin = -ymax;
+    var xmin = ymin * aspect;
+    var xmax = ymax * aspect;
+
+    return makeFrustum(xmin, xmax, ymin, ymax, znear, zfar);
+}
+
+//
+// glFrustum
+//
+function makeFrustum(left, right,
+                     bottom, top,
+                     znear, zfar)
+{
+    var X = 2*znear/(right-left);
+    var Y = 2*znear/(top-bottom);
+    var A = (right+left)/(right-left);
+    var B = (top+bottom)/(top-bottom);
+    var C = -(zfar+znear)/(zfar-znear);
+    var D = -2*zfar*znear/(zfar-znear);
+
+    return $M([[X, 0, A, 0],
+               [0, Y, B, 0],
+               [0, 0, C, D],
+               [0, 0, -1, 0]]);
+}
+
+//
+// glOrtho
+//
+function makeOrtho(left, right, bottom, top, znear, zfar)
+{
+    var tx = - (right + left) / (right - left);
+    var ty = - (top + bottom) / (top - bottom);
+    var tz = - (zfar + znear) / (zfar - znear);
+
+    return $M([[2 / (right - left), 0, 0, tx],
+	       [0, 2 / (top - bottom), 0, ty],
+	       [0, 0, -2 / (zfar - znear), tz],
+	       [0, 0, 0, 1]]);
+}
+
+
+},{}],6:[function(require,module,exports){
+// === Sylvester ===
+// Vector and Matrix mathematics modules for JavaScript
+// Copyright (c) 2007 James Coglan
+// 
+// Permission is hereby granted, free of charge, to any person obtaining
+// a copy of this software and associated documentation files (the "Software"),
+// to deal in the Software without restriction, including without limitation
+// the rights to use, copy, modify, merge, publish, distribute, sublicense,
+// and/or sell copies of the Software, and to permit persons to whom the
+// Software is furnished to do so, subject to the following conditions:
+// 
+// The above copyright notice and this permission notice shall be included
+// in all copies or substantial portions of the Software.
+// 
+// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS
+// OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+// FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL
+// THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+// LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+// FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+// DEALINGS IN THE SOFTWARE.
+
+var Sylvester = {
+  version: '0.1.3',
+  precision: 1e-6
+};
+
+function Vector() {}
+Vector.prototype = {
+
+  // Returns element i of the vector
+  e: function(i) {
+    return (i < 1 || i > this.elements.length) ? null : this.elements[i-1];
+  },
+
+  // Returns the number of elements the vector has
+  dimensions: function() {
+    return this.elements.length;
+  },
+
+  // Returns the modulus ('length') of the vector
+  modulus: function() {
+    return Math.sqrt(this.dot(this));
+  },
+
+  // Returns true iff the vector is equal to the argument
+  eql: function(vector) {
+    var n = this.elements.length;
+    var V = vector.elements || vector;
+    if (n != V.length) { return false; }
+    do {
+      if (Math.abs(this.elements[n-1] - V[n-1]) > Sylvester.precision) { return false; }
+    } while (--n);
+    return true;
+  },
+
+  // Returns a copy of the vector
+  dup: function() {
+    return Vector.create(this.elements);
+  },
+
+  // Maps the vector to another vector according to the given function
+  map: function(fn) {
+    var elements = [];
+    this.each(function(x, i) {
+      elements.push(fn(x, i));
+    });
+    return Vector.create(elements);
+  },
+  
+  // Calls the iterator for each element of the vector in turn
+  each: function(fn) {
+    var n = this.elements.length, k = n, i;
+    do { i = k - n;
+      fn(this.elements[i], i+1);
+    } while (--n);
+  },
+
+  // Returns a new vector created by normalizing the receiver
+  toUnitVector: function() {
+    var r = this.modulus();
+    if (r === 0) { return this.dup(); }
+    return this.map(function(x) { return x/r; });
+  },
+
+  // Returns the angle between the vector and the argument (also a vector)
+  angleFrom: function(vector) {
+    var V = vector.elements || vector;
+    var n = this.elements.length, k = n, i;
+    if (n != V.length) { return null; }
+    var dot = 0, mod1 = 0, mod2 = 0;
+    // Work things out in parallel to save time
+    this.each(function(x, i) {
+      dot += x * V[i-1];
+      mod1 += x * x;
+      mod2 += V[i-1] * V[i-1];
+    });
+    mod1 = Math.sqrt(mod1); mod2 = Math.sqrt(mod2);
+    if (mod1*mod2 === 0) { return null; }
+    var theta = dot / (mod1*mod2);
+    if (theta < -1) { theta = -1; }
+    if (theta > 1) { theta = 1; }
+    return Math.acos(theta);
+  },
+
+  // Returns true iff the vector is parallel to the argument
+  isParallelTo: function(vector) {
+    var angle = this.angleFrom(vector);
+    return (angle === null) ? null : (angle <= Sylvester.precision);
+  },
+
+  // Returns true iff the vector is antiparallel to the argument
+  isAntiparallelTo: function(vector) {
+    var angle = this.angleFrom(vector);
+    return (angle === null) ? null : (Math.abs(angle - Math.PI) <= Sylvester.precision);
+  },
+
+  // Returns true iff the vector is perpendicular to the argument
+  isPerpendicularTo: function(vector) {
+    var dot = this.dot(vector);
+    return (dot === null) ? null : (Math.abs(dot) <= Sylvester.precision);
+  },
+
+  // Returns the result of adding the argument to the vector
+  add: function(vector) {
+    var V = vector.elements || vector;
+    if (this.elements.length != V.length) { return null; }
+    return this.map(function(x, i) { return x + V[i-1]; });
+  },
+
+  // Returns the result of subtracting the argument from the vector
+  subtract: function(vector) {
+    var V = vector.elements || vector;
+    if (this.elements.length != V.length) { return null; }
+    return this.map(function(x, i) { return x - V[i-1]; });
+  },
+
+  // Returns the result of multiplying the elements of the vector by the argument
+  multiply: function(k) {
+    return this.map(function(x) { return x*k; });
+  },
+
+  x: function(k) { return this.multiply(k); },
+
+  // Returns the scalar product of the vector with the argument
+  // Both vectors must have equal dimensionality
+  dot: function(vector) {
+    var V = vector.elements || vector;
+    var i, product = 0, n = this.elements.length;
+    if (n != V.length) { return null; }
+    do { product += this.elements[n-1] * V[n-1]; } while (--n);
+    return product;
+  },
+
+  // Returns the vector product of the vector with the argument
+  // Both vectors must have dimensionality 3
+  cross: function(vector) {
+    var B = vector.elements || vector;
+    if (this.elements.length != 3 || B.length != 3) { return null; }
+    var A = this.elements;
+    return Vector.create([
+      (A[1] * B[2]) - (A[2] * B[1]),
+      (A[2] * B[0]) - (A[0] * B[2]),
+      (A[0] * B[1]) - (A[1] * B[0])
+    ]);
+  },
+
+  // Returns the (absolute) largest element of the vector
+  max: function() {
+    var m = 0, n = this.elements.length, k = n, i;
+    do { i = k - n;
+      if (Math.abs(this.elements[i]) > Math.abs(m)) { m = this.elements[i]; }
+    } while (--n);
+    return m;
+  },
+
+  // Returns the index of the first match found
+  indexOf: function(x) {
+    var index = null, n = this.elements.length, k = n, i;
+    do { i = k - n;
+      if (index === null && this.elements[i] == x) {
+        index = i + 1;
+      }
+    } while (--n);
+    return index;
+  },
+
+  // Returns a diagonal matrix with the vector's elements as its diagonal elements
+  toDiagonalMatrix: function() {
+    return Matrix.Diagonal(this.elements);
+  },
+
+  // Returns the result of rounding the elements of the vector
+  round: function() {
+    return this.map(function(x) { return Math.round(x); });
+  },
+
+  // Returns a copy of the vector with elements set to the given value if they
+  // differ from it by less than Sylvester.precision
+  snapTo: function(x) {
+    return this.map(function(y) {
+      return (Math.abs(y - x) <= Sylvester.precision) ? x : y;
+    });
+  },
+
+  // Returns the vector's distance from the argument, when considered as a point in space
+  distanceFrom: function(obj) {
+    if (obj.anchor) { return obj.distanceFrom(this); }
+    var V = obj.elements || obj;
+    if (V.length != this.elements.length) { return null; }
+    var sum = 0, part;
+    this.each(function(x, i) {
+      part = x - V[i-1];
+      sum += part * part;
+    });
+    return Math.sqrt(sum);
+  },
+
+  // Returns true if the vector is point on the given line
+  liesOn: function(line) {
+    return line.contains(this);
+  },
+
+  // Return true iff the vector is a point in the given plane
+  liesIn: function(plane) {
+    return plane.contains(this);
+  },
+
+  // Rotates the vector about the given object. The object should be a 
+  // point if the vector is 2D, and a line if it is 3D. Be careful with line directions!
+  rotate: function(t, obj) {
+    var V, R, x, y, z;
+    switch (this.elements.length) {
+      case 2:
+        V = obj.elements || obj;
+        if (V.length != 2) { return null; }
+        R = Matrix.Rotation(t).elements;
+        x = this.elements[0] - V[0];
+        y = this.elements[1] - V[1];
+        return Vector.create([
+          V[0] + R[0][0] * x + R[0][1] * y,
+          V[1] + R[1][0] * x + R[1][1] * y
+        ]);
+        break;
+      case 3:
+        if (!obj.direction) { return null; }
+        var C = obj.pointClosestTo(this).elements;
+        R = Matrix.Rotation(t, obj.direction).elements;
+        x = this.elements[0] - C[0];
+        y = this.elements[1] - C[1];
+        z = this.elements[2] - C[2];
+        return Vector.create([
+          C[0] + R[0][0] * x + R[0][1] * y + R[0][2] * z,
+          C[1] + R[1][0] * x + R[1][1] * y + R[1][2] * z,
+          C[2] + R[2][0] * x + R[2][1] * y + R[2][2] * z
+        ]);
+        break;
+      default:
+        return null;
+    }
+  },
+
+  // Returns the result of reflecting the point in the given point, line or plane
+  reflectionIn: function(obj) {
+    if (obj.anchor) {
+      // obj is a plane or line
+      var P = this.elements.slice();
+      var C = obj.pointClosestTo(P).elements;
+      return Vector.create([C[0] + (C[0] - P[0]), C[1] + (C[1] - P[1]), C[2] + (C[2] - (P[2] || 0))]);
+    } else {
+      // obj is a point
+      var Q = obj.elements || obj;
+      if (this.elements.length != Q.length) { return null; }
+      return this.map(function(x, i) { return Q[i-1] + (Q[i-1] - x); });
+    }
+  },
+
+  // Utility to make sure vectors are 3D. If they are 2D, a zero z-component is added
+  to3D: function() {
+    var V = this.dup();
+    switch (V.elements.length) {
+      case 3: break;
+      case 2: V.elements.push(0); break;
+      default: return null;
+    }
+    return V;
+  },
+
+  // Returns a string representation of the vector
+  inspect: function() {
+    return '[' + this.elements.join(', ') + ']';
+  },
+
+  // Set vector's elements from an array
+  setElements: function(els) {
+    this.elements = (els.elements || els).slice();
+    return this;
+  }
+};
+  
+// Constructor function
+Vector.create = function(elements) {
+  var V = new Vector();
+  return V.setElements(elements);
+};
+
+// i, j, k unit vectors
+Vector.i = Vector.create([1,0,0]);
+Vector.j = Vector.create([0,1,0]);
+Vector.k = Vector.create([0,0,1]);
+
+// Random vector of size n
+Vector.Random = function(n) {
+  var elements = [];
+  do { elements.push(Math.random());
+  } while (--n);
+  return Vector.create(elements);
+};
+
+// Vector filled with zeros
+Vector.Zero = function(n) {
+  var elements = [];
+  do { elements.push(0);
+  } while (--n);
+  return Vector.create(elements);
+};
+
+
+
+function Matrix() {}
+Matrix.prototype = {
+
+  // Returns element (i,j) of the matrix
+  e: function(i,j) {
+    if (i < 1 || i > this.elements.length || j < 1 || j > this.elements[0].length) { return null; }
+    return this.elements[i-1][j-1];
+  },
+
+  // Returns row k of the matrix as a vector
+  row: function(i) {
+    if (i > this.elements.length) { return null; }
+    return Vector.create(this.elements[i-1]);
+  },
+
+  // Returns column k of the matrix as a vector
+  col: function(j) {
+    if (j > this.elements[0].length) { return null; }
+    var col = [], n = this.elements.length, k = n, i;
+    do { i = k - n;
+      col.push(this.elements[i][j-1]);
+    } while (--n);
+    return Vector.create(col);
+  },
+
+  // Returns the number of rows/columns the matrix has
+  dimensions: function() {
+    return {rows: this.elements.length, cols: this.elements[0].length};
+  },
+
+  // Returns the number of rows in the matrix
+  rows: function() {
+    return this.elements.length;
+  },
+
+  // Returns the number of columns in the matrix
+  cols: function() {
+    return this.elements[0].length;
+  },
+
+  // Returns true iff the matrix is equal to the argument. You can supply
+  // a vector as the argument, in which case the receiver must be a
+  // one-column matrix equal to the vector.
+  eql: function(matrix) {
+    var M = matrix.elements || matrix;
+    if (typeof(M[0][0]) == 'undefined') { M = Matrix.create(M).elements; }
+    if (this.elements.length != M.length ||
+        this.elements[0].length != M[0].length) { return false; }
+    var ni = this.elements.length, ki = ni, i, nj, kj = this.elements[0].length, j;
+    do { i = ki - ni;
+      nj = kj;
+      do { j = kj - nj;
+        if (Math.abs(this.elements[i][j] - M[i][j]) > Sylvester.precision) { return false; }
+      } while (--nj);
+    } while (--ni);
+    return true;
+  },
+
+  // Returns a copy of the matrix
+  dup: function() {
+    return Matrix.create(this.elements);
+  },
+
+  // Maps the matrix to another matrix (of the same dimensions) according to the given function
+  map: function(fn) {
+    var els = [], ni = this.elements.length, ki = ni, i, nj, kj = this.elements[0].length, j;
+    do { i = ki - ni;
+      nj = kj;
+      els[i] = [];
+      do { j = kj - nj;
+        els[i][j] = fn(this.elements[i][j], i + 1, j + 1);
+      } while (--nj);
+    } while (--ni);
+    return Matrix.create(els);
+  },
+
+  // Returns true iff the argument has the same dimensions as the matrix
+  isSameSizeAs: function(matrix) {
+    var M = matrix.elements || matrix;
+    if (typeof(M[0][0]) == 'undefined') { M = Matrix.create(M).elements; }
+    return (this.elements.length == M.length &&
+        this.elements[0].length == M[0].length);
+  },
+
+  // Returns the result of adding the argument to the matrix
+  add: function(matrix) {
+    var M = matrix.elements || matrix;
+    if (typeof(M[0][0]) == 'undefined') { M = Matrix.create(M).elements; }
+    if (!this.isSameSizeAs(M)) { return null; }
+    return this.map(function(x, i, j) { return x + M[i-1][j-1]; });
+  },
+
+  // Returns the result of subtracting the argument from the matrix
+  subtract: function(matrix) {
+    var M = matrix.elements || matrix;
+    if (typeof(M[0][0]) == 'undefined') { M = Matrix.create(M).elements; }
+    if (!this.isSameSizeAs(M)) { return null; }
+    return this.map(function(x, i, j) { return x - M[i-1][j-1]; });
+  },
+
+  // Returns true iff the matrix can multiply the argument from the left
+  canMultiplyFromLeft: function(matrix) {
+    var M = matrix.elements || matrix;
+    if (typeof(M[0][0]) == 'undefined') { M = Matrix.create(M).elements; }
+    // this.columns should equal matrix.rows
+    return (this.elements[0].length == M.length);
+  },
+
+  // Returns the result of multiplying the matrix from the right by the argument.
+  // If the argument is a scalar then just multiply all the elements. If the argument is
+  // a vector, a vector is returned, which saves you having to remember calling
+  // col(1) on the result.
+  multiply: function(matrix) {
+    if (!matrix.elements) {
+      return this.map(function(x) { return x * matrix; });
+    }
+    var returnVector = matrix.modulus ? true : false;
+    var M = matrix.elements || matrix;
+    if (typeof(M[0][0]) == 'undefined') { M = Matrix.create(M).elements; }
+    if (!this.canMultiplyFromLeft(M)) { return null; }
+    var ni = this.elements.length, ki = ni, i, nj, kj = M[0].length, j;
+    var cols = this.elements[0].length, elements = [], sum, nc, c;
+    do { i = ki - ni;
+      elements[i] = [];
+      nj = kj;
+      do { j = kj - nj;
+        sum = 0;
+        nc = cols;
+        do { c = cols - nc;
+          sum += this.elements[i][c] * M[c][j];
+        } while (--nc);
+        elements[i][j] = sum;
+      } while (--nj);
+    } while (--ni);
+    var M = Matrix.create(elements);
+    return returnVector ? M.col(1) : M;
+  },
+
+  x: function(matrix) { return this.multiply(matrix); },
+
+  // Returns a submatrix taken from the matrix
+  // Argument order is: start row, start col, nrows, ncols
+  // Element selection wraps if the required index is outside the matrix's bounds, so you could
+  // use this to perform row/column cycling or copy-augmenting.
+  minor: function(a, b, c, d) {
+    var elements = [], ni = c, i, nj, j;
+    var rows = this.elements.length, cols = this.elements[0].length;
+    do { i = c - ni;
+      elements[i] = [];
+      nj = d;
+      do { j = d - nj;
+        elements[i][j] = this.elements[(a+i-1)%rows][(b+j-1)%cols];
+      } while (--nj);
+    } while (--ni);
+    return Matrix.create(elements);
+  },
+
+  // Returns the transpose of the matrix
+  transpose: function() {
+    var rows = this.elements.length, cols = this.elements[0].length;
+    var elements = [], ni = cols, i, nj, j;
+    do { i = cols - ni;
+      elements[i] = [];
+      nj = rows;
+      do { j = rows - nj;
+        elements[i][j] = this.elements[j][i];
+      } while (--nj);
+    } while (--ni);
+    return Matrix.create(elements);
+  },
+
+  // Returns true iff the matrix is square
+  isSquare: function() {
+    return (this.elements.length == this.elements[0].length);
+  },
+
+  // Returns the (absolute) largest element of the matrix
+  max: function() {
+    var m = 0, ni = this.elements.length, ki = ni, i, nj, kj = this.elements[0].length, j;
+    do { i = ki - ni;
+      nj = kj;
+      do { j = kj - nj;
+        if (Math.abs(this.elements[i][j]) > Math.abs(m)) { m = this.elements[i][j]; }
+      } while (--nj);
+    } while (--ni);
+    return m;
+  },
+
+  // Returns the indeces of the first match found by reading row-by-row from left to right
+  indexOf: function(x) {
+    var index = null, ni = this.elements.length, ki = ni, i, nj, kj = this.elements[0].length, j;
+    do { i = ki - ni;
+      nj = kj;
+      do { j = kj - nj;
+        if (this.elements[i][j] == x) { return {i: i+1, j: j+1}; }
+      } while (--nj);
+    } while (--ni);
+    return null;
+  },
+
+  // If the matrix is square, returns the diagonal elements as a vector.
+  // Otherwise, returns null.
+  diagonal: function() {
+    if (!this.isSquare) { return null; }
+    var els = [], n = this.elements.length, k = n, i;
+    do { i = k - n;
+      els.push(this.elements[i][i]);
+    } while (--n);
+    return Vector.create(els);
+  },
+
+  // Make the matrix upper (right) triangular by Gaussian elimination.
+  // This method only adds multiples of rows to other rows. No rows are
+  // scaled up or switched, and the determinant is preserved.
+  toRightTriangular: function() {
+    var M = this.dup(), els;
+    var n = this.elements.length, k = n, i, np, kp = this.elements[0].length, p;
+    do { i = k - n;
+      if (M.elements[i][i] == 0) {
+        for (j = i + 1; j < k; j++) {
+          if (M.elements[j][i] != 0) {
+            els = []; np = kp;
+            do { p = kp - np;
+              els.push(M.elements[i][p] + M.elements[j][p]);
+            } while (--np);
+            M.elements[i] = els;
+            break;
+          }
+        }
+      }
+      if (M.elements[i][i] != 0) {
+        for (j = i + 1; j < k; j++) {
+          var multiplier = M.elements[j][i] / M.elements[i][i];
+          els = []; np = kp;
+          do { p = kp - np;
+            // Elements with column numbers up to an including the number
+            // of the row that we're subtracting can safely be set straight to
+            // zero, since that's the point of this routine and it avoids having
+            // to loop over and correct rounding errors later
+            els.push(p <= i ? 0 : M.elements[j][p] - M.elements[i][p] * multiplier);
+          } while (--np);
+          M.elements[j] = els;
+        }
+      }
+    } while (--n);
+    return M;
+  },
+
+  toUpperTriangular: function() { return this.toRightTriangular(); },
+
+  // Returns the determinant for square matrices
+  determinant: function() {
+    if (!this.isSquare()) { return null; }
+    var M = this.toRightTriangular();
+    var det = M.elements[0][0], n = M.elements.length - 1, k = n, i;
+    do { i = k - n + 1;
+      det = det * M.elements[i][i];
+    } while (--n);
+    return det;
+  },
+
+  det: function() { return this.determinant(); },
+
+  // Returns true iff the matrix is singular
+  isSingular: function() {
+    return (this.isSquare() && this.determinant() === 0);
+  },
+
+  // Returns the trace for square matrices
+  trace: function() {
+    if (!this.isSquare()) { return null; }
+    var tr = this.elements[0][0], n = this.elements.length - 1, k = n, i;
+    do { i = k - n + 1;
+      tr += this.elements[i][i];
+    } while (--n);
+    return tr;
+  },
+
+  tr: function() { return this.trace(); },
+
+  // Returns the rank of the matrix
+  rank: function() {
+    var M = this.toRightTriangular(), rank = 0;
+    var ni = this.elements.length, ki = ni, i, nj, kj = this.elements[0].length, j;
+    do { i = ki - ni;
+      nj = kj;
+      do { j = kj - nj;
+        if (Math.abs(M.elements[i][j]) > Sylvester.precision) { rank++; break; }
+      } while (--nj);
+    } while (--ni);
+    return rank;
+  },
+  
+  rk: function() { return this.rank(); },
+
+  // Returns the result of attaching the given argument to the right-hand side of the matrix
+  augment: function(matrix) {
+    var M = matrix.elements || matrix;
+    if (typeof(M[0][0]) == 'undefined') { M = Matrix.create(M).elements; }
+    var T = this.dup(), cols = T.elements[0].length;
+    var ni = T.elements.length, ki = ni, i, nj, kj = M[0].length, j;
+    if (ni != M.length) { return null; }
+    do { i = ki - ni;
+      nj = kj;
+      do { j = kj - nj;
+        T.elements[i][cols + j] = M[i][j];
+      } while (--nj);
+    } while (--ni);
+    return T;
+  },
+
+  // Returns the inverse (if one exists) using Gauss-Jordan
+  inverse: function() {
+    if (!this.isSquare() || this.isSingular()) { return null; }
+    var ni = this.elements.length, ki = ni, i, j;
+    var M = this.augment(Matrix.I(ni)).toRightTriangular();
+    var np, kp = M.elements[0].length, p, els, divisor;
+    var inverse_elements = [], new_element;
+    // Matrix is non-singular so there will be no zeros on the diagonal
+    // Cycle through rows from last to first
+    do { i = ni - 1;
+      // First, normalise diagonal elements to 1
+      els = []; np = kp;
+      inverse_elements[i] = [];
+      divisor = M.elements[i][i];
+      do { p = kp - np;
+        new_element = M.elements[i][p] / divisor;
+        els.push(new_element);
+        // Shuffle of the current row of the right hand side into the results
+        // array as it will not be modified by later runs through this loop
+        if (p >= ki) { inverse_elements[i].push(new_element); }
+      } while (--np);
+      M.elements[i] = els;
+      // Then, subtract this row from those above it to
+      // give the identity matrix on the left hand side
+      for (j = 0; j < i; j++) {
+        els = []; np = kp;
+        do { p = kp - np;
+          els.push(M.elements[j][p] - M.elements[i][p] * M.elements[j][i]);
+        } while (--np);
+        M.elements[j] = els;
+      }
+    } while (--ni);
+    return Matrix.create(inverse_elements);
+  },
+
+  inv: function() { return this.inverse(); },
+
+  // Returns the result of rounding all the elements
+  round: function() {
+    return this.map(function(x) { return Math.round(x); });
+  },
+
+  // Returns a copy of the matrix with elements set to the given value if they
+  // differ from it by less than Sylvester.precision
+  snapTo: function(x) {
+    return this.map(function(p) {
+      return (Math.abs(p - x) <= Sylvester.precision) ? x : p;
+    });
+  },
+
+  // Returns a string representation of the matrix
+  inspect: function() {
+    var matrix_rows = [];
+    var n = this.elements.length, k = n, i;
+    do { i = k - n;
+      matrix_rows.push(Vector.create(this.elements[i]).inspect());
+    } while (--n);
+    return matrix_rows.join('\n');
+  },
+
+  // Set the matrix's elements from an array. If the argument passed
+  // is a vector, the resulting matrix will be a single column.
+  setElements: function(els) {
+    var i, elements = els.elements || els;
+    if (typeof(elements[0][0]) != 'undefined') {
+      var ni = elements.length, ki = ni, nj, kj, j;
+      this.elements = [];
+      do { i = ki - ni;
+        nj = elements[i].length; kj = nj;
+        this.elements[i] = [];
+        do { j = kj - nj;
+          this.elements[i][j] = elements[i][j];
+        } while (--nj);
+      } while(--ni);
+      return this;
+    }
+    var n = elements.length, k = n;
+    this.elements = [];
+    do { i = k - n;
+      this.elements.push([elements[i]]);
+    } while (--n);
+    return this;
+  }
+};
+
+// Constructor function
+Matrix.create = function(elements) {
+  var M = new Matrix();
+  return M.setElements(elements);
+};
+
+// Identity matrix of size n
+Matrix.I = function(n) {
+  var els = [], k = n, i, nj, j;
+  do { i = k - n;
+    els[i] = []; nj = k;
+    do { j = k - nj;
+      els[i][j] = (i == j) ? 1 : 0;
+    } while (--nj);
+  } while (--n);
+  return Matrix.create(els);
+};
+
+// Diagonal matrix - all off-diagonal elements are zero
+Matrix.Diagonal = function(elements) {
+  var n = elements.length, k = n, i;
+  var M = Matrix.I(n);
+  do { i = k - n;
+    M.elements[i][i] = elements[i];
+  } while (--n);
+  return M;
+};
+
+// Rotation matrix about some axis. If no axis is
+// supplied, assume we're after a 2D transform
+Matrix.Rotation = function(theta, a) {
+  if (!a) {
+    return Matrix.create([
+      [Math.cos(theta),  -Math.sin(theta)],
+      [Math.sin(theta),   Math.cos(theta)]
+    ]);
+  }
+  var axis = a.dup();
+  if (axis.elements.length != 3) { return null; }
+  var mod = axis.modulus();
+  var x = axis.elements[0]/mod, y = axis.elements[1]/mod, z = axis.elements[2]/mod;
+  var s = Math.sin(theta), c = Math.cos(theta), t = 1 - c;
+  // Formula derived here: http://www.gamedev.net/reference/articles/article1199.asp
+  // That proof rotates the co-ordinate system so theta
+  // becomes -theta and sin becomes -sin here.
+  return Matrix.create([
+    [ t*x*x + c, t*x*y - s*z, t*x*z + s*y ],
+    [ t*x*y + s*z, t*y*y + c, t*y*z - s*x ],
+    [ t*x*z - s*y, t*y*z + s*x, t*z*z + c ]
+  ]);
+};
+
+// Special case rotations
+Matrix.RotationX = function(t) {
+  var c = Math.cos(t), s = Math.sin(t);
+  return Matrix.create([
+    [  1,  0,  0 ],
+    [  0,  c, -s ],
+    [  0,  s,  c ]
+  ]);
+};
+Matrix.RotationY = function(t) {
+  var c = Math.cos(t), s = Math.sin(t);
+  return Matrix.create([
+    [  c,  0,  s ],
+    [  0,  1,  0 ],
+    [ -s,  0,  c ]
+  ]);
+};
+Matrix.RotationZ = function(t) {
+  var c = Math.cos(t), s = Math.sin(t);
+  return Matrix.create([
+    [  c, -s,  0 ],
+    [  s,  c,  0 ],
+    [  0,  0,  1 ]
+  ]);
+};
+
+// Random matrix of n rows, m columns
+Matrix.Random = function(n, m) {
+  return Matrix.Zero(n, m).map(
+    function() { return Math.random(); }
+  );
+};
+
+// Matrix filled with zeros
+Matrix.Zero = function(n, m) {
+  var els = [], ni = n, i, nj, j;
+  do { i = n - ni;
+    els[i] = [];
+    nj = m;
+    do { j = m - nj;
+      els[i][j] = 0;
+    } while (--nj);
+  } while (--ni);
+  return Matrix.create(els);
+};
+
+
+
+function Line() {}
+Line.prototype = {
+
+  // Returns true if the argument occupies the same space as the line
+  eql: function(line) {
+    return (this.isParallelTo(line) && this.contains(line.anchor));
+  },
+
+  // Returns a copy of the line
+  dup: function() {
+    return Line.create(this.anchor, this.direction);
+  },
+
+  // Returns the result of translating the line by the given vector/array
+  translate: function(vector) {
+    var V = vector.elements || vector;
+    return Line.create([
+      this.anchor.elements[0] + V[0],
+      this.anchor.elements[1] + V[1],
+      this.anchor.elements[2] + (V[2] || 0)
+    ], this.direction);
+  },
+
+  // Returns true if the line is parallel to the argument. Here, 'parallel to'
+  // means that the argument's direction is either parallel or antiparallel to
+  // the line's own direction. A line is parallel to a plane if the two do not
+  // have a unique intersection.
+  isParallelTo: function(obj) {
+    if (obj.normal) { return obj.isParallelTo(this); }
+    var theta = this.direction.angleFrom(obj.direction);
+    return (Math.abs(theta) <= Sylvester.precision || Math.abs(theta - Math.PI) <= Sylvester.precision);
+  },
+
+  // Returns the line's perpendicular distance from the argument,
+  // which can be a point, a line or a plane
+  distanceFrom: function(obj) {
+    if (obj.normal) { return obj.distanceFrom(this); }
+    if (obj.direction) {
+      // obj is a line
+      if (this.isParallelTo(obj)) { return this.distanceFrom(obj.anchor); }
+      var N = this.direction.cross(obj.direction).toUnitVector().elements;
+      var A = this.anchor.elements, B = obj.anchor.elements;
+      return Math.abs((A[0] - B[0]) * N[0] + (A[1] - B[1]) * N[1] + (A[2] - B[2]) * N[2]);
+    } else {
+      // obj is a point
+      var P = obj.elements || obj;
+      var A = this.anchor.elements, D = this.direction.elements;
+      var PA1 = P[0] - A[0], PA2 = P[1] - A[1], PA3 = (P[2] || 0) - A[2];
+      var modPA = Math.sqrt(PA1*PA1 + PA2*PA2 + PA3*PA3);
+      if (modPA === 0) return 0;
+      // Assumes direction vector is normalized
+      var cosTheta = (PA1 * D[0] + PA2 * D[1] + PA3 * D[2]) / modPA;
+      var sin2 = 1 - cosTheta*cosTheta;
+      return Math.abs(modPA * Math.sqrt(sin2 < 0 ? 0 : sin2));
+    }
+  },
+
+  // Returns true iff the argument is a point on the line
+  contains: function(point) {
+    var dist = this.distanceFrom(point);
+    return (dist !== null && dist <= Sylvester.precision);
+  },
+
+  // Returns true iff the line lies in the given plane
+  liesIn: function(plane) {
+    return plane.contains(this);
+  },
+
+  // Returns true iff the line has a unique point of intersection with the argument
+  intersects: function(obj) {
+    if (obj.normal) { return obj.intersects(this); }
+    return (!this.isParallelTo(obj) && this.distanceFrom(obj) <= Sylvester.precision);
+  },
+
+  // Returns the unique intersection point with the argument, if one exists
+  intersectionWith: function(obj) {
+    if (obj.normal) { return obj.intersectionWith(this); }
+    if (!this.intersects(obj)) { return null; }
+    var P = this.anchor.elements, X = this.direction.elements,
+        Q = obj.anchor.elements, Y = obj.direction.elements;
+    var X1 = X[0], X2 = X[1], X3 = X[2], Y1 = Y[0], Y2 = Y[1], Y3 = Y[2];
+    var PsubQ1 = P[0] - Q[0], PsubQ2 = P[1] - Q[1], PsubQ3 = P[2] - Q[2];
+    var XdotQsubP = - X1*PsubQ1 - X2*PsubQ2 - X3*PsubQ3;
+    var YdotPsubQ = Y1*PsubQ1 + Y2*PsubQ2 + Y3*PsubQ3;
+    var XdotX = X1*X1 + X2*X2 + X3*X3;
+    var YdotY = Y1*Y1 + Y2*Y2 + Y3*Y3;
+    var XdotY = X1*Y1 + X2*Y2 + X3*Y3;
+    var k = (XdotQsubP * YdotY / XdotX + XdotY * YdotPsubQ) / (YdotY - XdotY * XdotY);
+    return Vector.create([P[0] + k*X1, P[1] + k*X2, P[2] + k*X3]);
+  },
+
+  // Returns the point on the line that is closest to the given point or line
+  pointClosestTo: function(obj) {
+    if (obj.direction) {
+      // obj is a line
+      if (this.intersects(obj)) { return this.intersectionWith(obj); }
+      if (this.isParallelTo(obj)) { return null; }
+      var D = this.direction.elements, E = obj.direction.elements;
+      var D1 = D[0], D2 = D[1], D3 = D[2], E1 = E[0], E2 = E[1], E3 = E[2];
+      // Create plane containing obj and the shared normal and intersect this with it
+      // Thank you: http://www.cgafaq.info/wiki/Line-line_distance
+      var x = (D3 * E1 - D1 * E3), y = (D1 * E2 - D2 * E1), z = (D2 * E3 - D3 * E2);
+      var N = Vector.create([x * E3 - y * E2, y * E1 - z * E3, z * E2 - x * E1]);
+      var P = Plane.create(obj.anchor, N);
+      return P.intersectionWith(this);
+    } else {
+      // obj is a point
+      var P = obj.elements || obj;
+      if (this.contains(P)) { return Vector.create(P); }
+      var A = this.anchor.elements, D = this.direction.elements;
+      var D1 = D[0], D2 = D[1], D3 = D[2], A1 = A[0], A2 = A[1], A3 = A[2];
+      var x = D1 * (P[1]-A2) - D2 * (P[0]-A1), y = D2 * ((P[2] || 0) - A3) - D3 * (P[1]-A2),
+          z = D3 * (P[0]-A1) - D1 * ((P[2] || 0) - A3);
+      var V = Vector.create([D2 * x - D3 * z, D3 * y - D1 * x, D1 * z - D2 * y]);
+      var k = this.distanceFrom(P) / V.modulus();
+      return Vector.create([
+        P[0] + V.elements[0] * k,
+        P[1] + V.elements[1] * k,
+        (P[2] || 0) + V.elements[2] * k
+      ]);
+    }
+  },
+
+  // Returns a copy of the line rotated by t radians about the given line. Works by
+  // finding the argument's closest point to this line's anchor point (call this C) and
+  // rotating the anchor about C. Also rotates the line's direction about the argument's.
+  // Be careful with this - the rotation axis' direction affects the outcome!
+  rotate: function(t, line) {
+    // If we're working in 2D
+    if (typeof(line.direction) == 'undefined') { line = Line.create(line.to3D(), Vector.k); }
+    var R = Matrix.Rotation(t, line.direction).elements;
+    var C = line.pointClosestTo(this.anchor).elements;
+    var A = this.anchor.elements, D = this.direction.elements;
+    var C1 = C[0], C2 = C[1], C3 = C[2], A1 = A[0], A2 = A[1], A3 = A[2];
+    var x = A1 - C1, y = A2 - C2, z = A3 - C3;
+    return Line.create([
+      C1 + R[0][0] * x + R[0][1] * y + R[0][2] * z,
+      C2 + R[1][0] * x + R[1][1] * y + R[1][2] * z,
+      C3 + R[2][0] * x + R[2][1] * y + R[2][2] * z
+    ], [
+      R[0][0] * D[0] + R[0][1] * D[1] + R[0][2] * D[2],
+      R[1][0] * D[0] + R[1][1] * D[1] + R[1][2] * D[2],
+      R[2][0] * D[0] + R[2][1] * D[1] + R[2][2] * D[2]
+    ]);
+  },
+
+  // Returns the line's reflection in the given point or line
+  reflectionIn: function(obj) {
+    if (obj.normal) {
+      // obj is a plane
+      var A = this.anchor.elements, D = this.direction.elements;
+      var A1 = A[0], A2 = A[1], A3 = A[2], D1 = D[0], D2 = D[1], D3 = D[2];
+      var newA = this.anchor.reflectionIn(obj).elements;
+      // Add the line's direction vector to its anchor, then mirror that in the plane
+      var AD1 = A1 + D1, AD2 = A2 + D2, AD3 = A3 + D3;
+      var Q = obj.pointClosestTo([AD1, AD2, AD3]).elements;
+      var newD = [Q[0] + (Q[0] - AD1) - newA[0], Q[1] + (Q[1] - AD2) - newA[1], Q[2] + (Q[2] - AD3) - newA[2]];
+      return Line.create(newA, newD);
+    } else if (obj.direction) {
+      // obj is a line - reflection obtained by rotating PI radians about obj
+      return this.rotate(Math.PI, obj);
+    } else {
+      // obj is a point - just reflect the line's anchor in it
+      var P = obj.elements || obj;
+      return Line.create(this.anchor.reflectionIn([P[0], P[1], (P[2] || 0)]), this.direction);
+    }
+  },
+
+  // Set the line's anchor point and direction.
+  setVectors: function(anchor, direction) {
+    // Need to do this so that line's properties are not
+    // references to the arguments passed in
+    anchor = Vector.create(anchor);
+    direction = Vector.create(direction);
+    if (anchor.elements.length == 2) {anchor.elements.push(0); }
+    if (direction.elements.length == 2) { direction.elements.push(0); }
+    if (anchor.elements.length > 3 || direction.elements.length > 3) { return null; }
+    var mod = direction.modulus();
+    if (mod === 0) { return null; }
+    this.anchor = anchor;
+    this.direction = Vector.create([
+      direction.elements[0] / mod,
+      direction.elements[1] / mod,
+      direction.elements[2] / mod
+    ]);
+    return this;
+  }
+};
+
+  
+// Constructor function
+Line.create = function(anchor, direction) {
+  var L = new Line();
+  return L.setVectors(anchor, direction);
+};
+
+// Axes
+Line.X = Line.create(Vector.Zero(3), Vector.i);
+Line.Y = Line.create(Vector.Zero(3), Vector.j);
+Line.Z = Line.create(Vector.Zero(3), Vector.k);
+
+
+
+function Plane() {}
+Plane.prototype = {
+
+  // Returns true iff the plane occupies the same space as the argument
+  eql: function(plane) {
+    return (this.contains(plane.anchor) && this.isParallelTo(plane));
+  },
+
+  // Returns a copy of the plane
+  dup: function() {
+    return Plane.create(this.anchor, this.normal);
+  },
+
+  // Returns the result of translating the plane by the given vector
+  translate: function(vector) {
+    var V = vector.elements || vector;
+    return Plane.create([
+      this.anchor.elements[0] + V[0],
+      this.anchor.elements[1] + V[1],
+      this.anchor.elements[2] + (V[2] || 0)
+    ], this.normal);
+  },
+
+  // Returns true iff the plane is parallel to the argument. Will return true
+  // if the planes are equal, or if you give a line and it lies in the plane.
+  isParallelTo: function(obj) {
+    var theta;
+    if (obj.normal) {
+      // obj is a plane
+      theta = this.normal.angleFrom(obj.normal);
+      return (Math.abs(theta) <= Sylvester.precision || Math.abs(Math.PI - theta) <= Sylvester.precision);
+    } else if (obj.direction) {
+      // obj is a line
+      return this.normal.isPerpendicularTo(obj.direction);
+    }
+    return null;
+  },
+  
+  // Returns true iff the receiver is perpendicular to the argument
+  isPerpendicularTo: function(plane) {
+    var theta = this.normal.angleFrom(plane.normal);
+    return (Math.abs(Math.PI/2 - theta) <= Sylvester.precision);
+  },
+
+  // Returns the plane's distance from the given object (point, line or plane)
+  distanceFrom: function(obj) {
+    if (this.intersects(obj) || this.contains(obj)) { return 0; }
+    if (obj.anchor) {
+      // obj is a plane or line
+      var A = this.anchor.elements, B = obj.anchor.elements, N = this.normal.elements;
+      return Math.abs((A[0] - B[0]) * N[0] + (A[1] - B[1]) * N[1] + (A[2] - B[2]) * N[2]);
+    } else {
+      // obj is a point
+      var P = obj.elements || obj;
+      var A = this.anchor.elements, N = this.normal.elements;
+      return Math.abs((A[0] - P[0]) * N[0] + (A[1] - P[1]) * N[1] + (A[2] - (P[2] || 0)) * N[2]);
+    }
+  },
+
+  // Returns true iff the plane contains the given point or line
+  contains: function(obj) {
+    if (obj.normal) { return null; }
+    if (obj.direction) {
+      return (this.contains(obj.anchor) && this.contains(obj.anchor.add(obj.direction)));
+    } else {
+      var P = obj.elements || obj;
+      var A = this.anchor.elements, N = this.normal.elements;
+      var diff = Math.abs(N[0]*(A[0] - P[0]) + N[1]*(A[1] - P[1]) + N[2]*(A[2] - (P[2] || 0)));
+      return (diff <= Sylvester.precision);
+    }
+  },
+
+  // Returns true iff the plane has a unique point/line of intersection with the argument
+  intersects: function(obj) {
+    if (typeof(obj.direction) == 'undefined' && typeof(obj.normal) == 'undefined') { return null; }
+    return !this.isParallelTo(obj);
+  },
+
+  // Returns the unique intersection with the argument, if one exists. The result
+  // will be a vector if a line is supplied, and a line if a plane is supplied.
+  intersectionWith: function(obj) {
+    if (!this.intersects(obj)) { return null; }
+    if (obj.direction) {
+      // obj is a line
+      var A = obj.anchor.elements, D = obj.direction.elements,
+          P = this.anchor.elements, N = this.normal.elements;
+      var multiplier = (N[0]*(P[0]-A[0]) + N[1]*(P[1]-A[1]) + N[2]*(P[2]-A[2])) / (N[0]*D[0] + N[1]*D[1] + N[2]*D[2]);
+      return Vector.create([A[0] + D[0]*multiplier, A[1] + D[1]*multiplier, A[2] + D[2]*multiplier]);
+    } else if (obj.normal) {
+      // obj is a plane
+      var direction = this.normal.cross(obj.normal).toUnitVector();
+      // To find an anchor point, we find one co-ordinate that has a value
+      // of zero somewhere on the intersection, and remember which one we picked
+      var N = this.normal.elements, A = this.anchor.elements,
+          O = obj.normal.elements, B = obj.anchor.elements;
+      var solver = Matrix.Zero(2,2), i = 0;
+      while (solver.isSingular()) {
+        i++;
+        solver = Matrix.create([
+          [ N[i%3], N[(i+1)%3] ],
+          [ O[i%3], O[(i+1)%3]  ]
+        ]);
+      }
+      // Then we solve the simultaneous equations in the remaining dimensions
+      var inverse = solver.inverse().elements;
+      var x = N[0]*A[0] + N[1]*A[1] + N[2]*A[2];
+      var y = O[0]*B[0] + O[1]*B[1] + O[2]*B[2];
+      var intersection = [
+        inverse[0][0] * x + inverse[0][1] * y,
+        inverse[1][0] * x + inverse[1][1] * y
+      ];
+      var anchor = [];
+      for (var j = 1; j <= 3; j++) {
+        // This formula picks the right element from intersection by
+        // cycling depending on which element we set to zero above
+        anchor.push((i == j) ? 0 : intersection[(j + (5 - i)%3)%3]);
+      }
+      return Line.create(anchor, direction);
+    }
+  },
+
+  // Returns the point in the plane closest to the given point
+  pointClosestTo: function(point) {
+    var P = point.elements || point;
+    var A = this.anchor.elements, N = this.normal.elements;
+    var dot = (A[0] - P[0]) * N[0] + (A[1] - P[1]) * N[1] + (A[2] - (P[2] || 0)) * N[2];
+    return Vector.create([P[0] + N[0] * dot, P[1] + N[1] * dot, (P[2] || 0) + N[2] * dot]);
+  },
+
+  // Returns a copy of the plane, rotated by t radians about the given line
+  // See notes on Line#rotate.
+  rotate: function(t, line) {
+    var R = Matrix.Rotation(t, line.direction).elements;
+    var C = line.pointClosestTo(this.anchor).elements;
+    var A = this.anchor.elements, N = this.normal.elements;
+    var C1 = C[0], C2 = C[1], C3 = C[2], A1 = A[0], A2 = A[1], A3 = A[2];
+    var x = A1 - C1, y = A2 - C2, z = A3 - C3;
+    return Plane.create([
+      C1 + R[0][0] * x + R[0][1] * y + R[0][2] * z,
+      C2 + R[1][0] * x + R[1][1] * y + R[1][2] * z,
+      C3 + R[2][0] * x + R[2][1] * y + R[2][2] * z
+    ], [
+      R[0][0] * N[0] + R[0][1] * N[1] + R[0][2] * N[2],
+      R[1][0] * N[0] + R[1][1] * N[1] + R[1][2] * N[2],
+      R[2][0] * N[0] + R[2][1] * N[1] + R[2][2] * N[2]
+    ]);
+  },
+
+  // Returns the reflection of the plane in the given point, line or plane.
+  reflectionIn: function(obj) {
+    if (obj.normal) {
+      // obj is a plane
+      var A = this.anchor.elements, N = this.normal.elements;
+      var A1 = A[0], A2 = A[1], A3 = A[2], N1 = N[0], N2 = N[1], N3 = N[2];
+      var newA = this.anchor.reflectionIn(obj).elements;
+      // Add the plane's normal to its anchor, then mirror that in the other plane
+      var AN1 = A1 + N1, AN2 = A2 + N2, AN3 = A3 + N3;
+      var Q = obj.pointClosestTo([AN1, AN2, AN3]).elements;
+      var newN = [Q[0] + (Q[0] - AN1) - newA[0], Q[1] + (Q[1] - AN2) - newA[1], Q[2] + (Q[2] - AN3) - newA[2]];
+      return Plane.create(newA, newN);
+    } else if (obj.direction) {
+      // obj is a line
+      return this.rotate(Math.PI, obj);
+    } else {
+      // obj is a point
+      var P = obj.elements || obj;
+      return Plane.create(this.anchor.reflectionIn([P[0], P[1], (P[2] || 0)]), this.normal);
+    }
+  },
+
+  // Sets the anchor point and normal to the plane. If three arguments are specified,
+  // the normal is calculated by assuming the three points should lie in the same plane.
+  // If only two are sepcified, the second is taken to be the normal. Normal vector is
+  // normalised before storage.
+  setVectors: function(anchor, v1, v2) {
+    anchor = Vector.create(anchor);
+    anchor = anchor.to3D(); if (anchor === null) { return null; }
+    v1 = Vector.create(v1);
+    v1 = v1.to3D(); if (v1 === null) { return null; }
+    if (typeof(v2) == 'undefined') {
+      v2 = null;
+    } else {
+      v2 = Vector.create(v2);
+      v2 = v2.to3D(); if (v2 === null) { return null; }
+    }
+    var A1 = anchor.elements[0], A2 = anchor.elements[1], A3 = anchor.elements[2];
+    var v11 = v1.elements[0], v12 = v1.elements[1], v13 = v1.elements[2];
+    var normal, mod;
+    if (v2 !== null) {
+      var v21 = v2.elements[0], v22 = v2.elements[1], v23 = v2.elements[2];
+      normal = Vector.create([
+        (v12 - A2) * (v23 - A3) - (v13 - A3) * (v22 - A2),
+        (v13 - A3) * (v21 - A1) - (v11 - A1) * (v23 - A3),
+        (v11 - A1) * (v22 - A2) - (v12 - A2) * (v21 - A1)
+      ]);
+      mod = normal.modulus();
+      if (mod === 0) { return null; }
+      normal = Vector.create([normal.elements[0] / mod, normal.elements[1] / mod, normal.elements[2] / mod]);
+    } else {
+      mod = Math.sqrt(v11*v11 + v12*v12 + v13*v13);
+      if (mod === 0) { return null; }
+      normal = Vector.create([v1.elements[0] / mod, v1.elements[1] / mod, v1.elements[2] / mod]);
+    }
+    this.anchor = anchor;
+    this.normal = normal;
+    return this;
+  }
+};
+
+// Constructor function
+Plane.create = function(anchor, v1, v2) {
+  var P = new Plane();
+  return P.setVectors(anchor, v1, v2);
+};
+
+// X-Y-Z planes
+Plane.XY = Plane.create(Vector.Zero(3), Vector.k);
+Plane.YZ = Plane.create(Vector.Zero(3), Vector.i);
+Plane.ZX = Plane.create(Vector.Zero(3), Vector.j);
+Plane.YX = Plane.XY; Plane.ZY = Plane.YZ; Plane.XZ = Plane.ZX;
+
+// Utility functions
+var $V = Vector.create;
+var $M = Matrix.create;
+var $L = Line.create;
+var $P = Plane.create;
+
+},{}],7:[function(require,module,exports){
 (function webpackUniversalModuleDefinition(root, factory) {
 /* istanbul ignore next */
 	if(typeof exports === 'object' && typeof module === 'object')
@@ -7411,4 +10256,4 @@ return /******/ (function(modules) { // webpackBootstrap
 /******/ ])
 });
 ;
-},{}]},{},[3,2,1]);
+},{}]},{},[4,2,1,5,6,3]);

@@ -22,6 +22,24 @@ function parseAST(text){
 	return graph
 }
 
+function getMaxWidth(root_node){
+	var currNodes = [root_node];
+	var nextNodes = [];
+	var maxWidth = 0;
+	while( currNodes.length != 0) {
+		console.log(currNodes);
+		for(var i = 0; i < currNodes.length; i++){
+			for(var j = 0; j < currNodes[i]["children"].length; j++){
+				nextNodes.push(currNodes[i]["children"][j]);
+			}
+	 }
+	 maxWidth = Math.max(nextNodes.length, maxWidth)
+   currNodes = nextNodes
+   nextNodes = []
+	}
+	return maxWidth;
+}
+
 function drawErrorAST(ast){
 
 	var container = "#drawArea"
@@ -165,6 +183,7 @@ function renderAST(ast) {
 	enumerateChildrenForD3Tree(ast, tree);
 	tree = removeEmptyNodes(tree)
 	tree = fixAssignment(tree)
+	tree = fixElse(tree)
 	drawD3fromTree(tree)
 }
 
@@ -216,14 +235,32 @@ function fixAssignment(node){
 	return node
 }
 
+function fixElse(node){
+
+	if(node.parent && (node.parent.text == "If") && (node.text == "" ) ){
+		console.log(node.parent.text);
+		node.text = "Else";
+	}
+
+	if(node["children"].length == 0){
+		return node
+	} else {
+		for (var i = 0; i < node["children"].length; i++) {
+			fixElse(node["children"][i])
+		}
+	}
+	return node
+}
+
 var svg_witdh;
 var svg_height;
 function drawD3fromTree(tree){
+	var max_width = getMaxWidth(tree)
 	var root = d3.hierarchy(tree)
 
 	var radius = 45
 	var y_margin = radius
-	svg_witdh = root.children.length * 400;
+	svg_witdh = max_width * 200;
 	svg_height = root.height * 125 + radius
 	var svg = d3.select(container).append("svg");
 	svg.attr("width", svg_witdh);

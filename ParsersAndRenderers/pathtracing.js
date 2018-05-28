@@ -1,3 +1,46 @@
+
+function renderPathTracing(list){
+  ui.deleteAll();
+  for (var i = 0; i < list.length; i++){
+    var drawObject = list[i];
+    if(drawObject.type == "cube"){
+      ui.addCubeAtLocation(drawObject.x,
+        drawObject.y,
+        drawObject.z,
+        drawObject.r);
+      }else if(drawObject.type == "sphere"){
+        ui.addSphereAtLocation(drawObject.x,
+          drawObject.y,
+          drawObject.z,
+          drawObject.r);
+        }
+      }
+    }
+
+
+UI.prototype.deleteAll = function() {
+  this.objects = [];
+  this.objects.splice(0, 0, new Light());
+  this.renderer.setObjects(this.objects);
+};
+
+UI.prototype.addSphereAtLocation = function(x, y, z, r) {
+  this.objects.push(new Sphere(Vector.create([x, y, z]), r, nextObjectId++));
+  this.renderer.setObjects(this.objects);
+};
+
+UI.prototype.addCubeAtLocation = function(x, y, z, r) {
+  this.objects.push(new Cube(Vector.create([x - r, y - r, z - r]), Vector.create([x + r, y + r, z + r]), nextObjectId++));
+  this.renderer.setObjects(this.objects);
+};
+
+
+////////////////////////////////////////////////////////////////////////////////
+// Pre Written Ray Tracing Code.
+// Someone please teach me a better way to do this...
+////////////////////////////////////////////////////////////////////////////////
+
+
 /*
  WebGL Path Tracing (http://madebyevan.com/webgl-path-tracing/)
  License: MIT License (see below)
@@ -1253,3 +1296,42 @@ document.onkeydown = function(event) {
     }
   }
 };
+
+console.log("onload")
+gl = null;
+error = document.getElementById('error');
+canvas = document.getElementById('canvas');
+try { gl = canvas.getContext('experimental-webgl'); } catch(e) {}
+
+if(gl) {
+  error.innerHTML = 'Loading...';
+
+  // keep track of whether an <input> is focused or not (will be no only if inputFocusCount == 0)
+  var inputs = document.getElementsByTagName('input');
+  for(var i= 0; i < inputs.length; i++) {
+    inputs[i].onfocus = function(){ inputFocusCount++; };
+    inputs[i].onblur = function(){ inputFocusCount--; };
+  }
+
+  material = parseInt(document.getElementById('material').value, 10);
+  environment = parseInt(document.getElementById('environment').value, 10);
+  ui = new UI();
+  ui.setObjects(makeSphereColumn());
+  var start = new Date();
+  error.style.zIndex = -1;
+  setInterval(function(){ tick((new Date() - start) * 0.001); }, 1000 / 60);
+} else {
+  error.innerHTML = 'Your browser does not support WebGL.<br>Please see <a href="http://www.khronos.org/webgl/wiki/Getting_a_WebGL_Implementation">Getting a WebGL Implementation</a>.';
+}
+
+module.exports = {
+  renderPathTracing : renderPathTracing,
+}
+
+
+// <br><button onclick="javascript:ui.setObjects(makeSphereColumn())">Sphere Column</button>
+// <br><button onclick="javascript:ui.setObjects(makeSpherePyramid())">Sphere Pyramid</button>
+// <br><button onclick="javascript:ui.setObjects(makeSphereAndCube())">Sphere and Cube</button>
+// <br><button onclick="javascript:ui.setObjects(makeCubeAndSpheres())">Cube and Spheres</button>
+// <br><button onclick="javascript:ui.setObjects(makeTableAndChair())">Table and Chair</button>
+// <br><button onclick="javascript:ui.setObjects(makeStacks())">Stacks</button>
