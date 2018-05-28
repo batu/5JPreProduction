@@ -33,3 +33,8 @@ In order to bundle the javascript files and get access to Node modules in the br
 
 If you make changes to any of the files and/or add new widgets you need to bundle them by calling:
 browserify app.js  ParsersAndRenderers/yourparser.js ParsersAndRenderers/otherparser.js > bundle.js
+
+## Watchify ##
+I recommend using Watchify to automatically call browserify whenever a chance is made.
+
+watchify app.js ParsersAndRenderers/fdg.js ParsersAndRenderers/ast.js -o bundle.js

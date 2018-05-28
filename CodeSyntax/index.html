@@ -16,14 +16,11 @@
     <link rel="stylesheet" href="theme/monokai.css">
     <script src="mode/yaml/yaml.js"></script>
 
-    <!-- AST Traverse. -->
-    <script src="lib/traverse/ast-traverse.js"></script>
+    <!-- Together JS. -->
+    <script src="https://togetherjs.com/togetherjs-min.js"></script>
 
     <!-- CSS -->
     <link rel="stylesheet" href="stylesheet.css">
-
-    <!-- Raphael for now -->
-    <script type="text/javascript" src="lib/raphael/raphael-min.js"></script>
 
     <!-- Blob and Filesaver to, well, save.-->
     <script src="https://cdn.rawgit.com/eligrey/canvas-toBlob.js/f1a01896135ab378aa5c0118eadd81da55e698d8/canvas-toBlob.js"></script>
@@ -31,6 +28,7 @@
 
   </head>
   <body>
+    <button onclick="TogetherJS(this); return false;">Start TogetherJS</button>
     <p>This is the home page for the 5J Web application. </p>
     <div id="codeeditor"></div>
     <div>

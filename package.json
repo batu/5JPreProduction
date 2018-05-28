@@ -1,0 +1,23 @@
+{
+  "name": "5j-toolkit",
+  "version": "0.1.0",
+  "description": "The collection of different parsers and interpreters. ",
+  "main": "app.js",
+  "dependencies": {
+    "styx": "^0.0.8"
+  },
+  "devDependencies": {},
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "author": "batu",
+  "license": "ISC",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/batu/5JPreProduction.git"
+  },
+  "bugs": {
+    "url": "https://github.com/batu/5JPreProduction/issues"
+  },
+  "homepage": "https://github.com/batu/5JPreProduction#readme"
+}
