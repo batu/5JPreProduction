@@ -1928,7 +1928,7 @@ console.log("Who whatches the wathitfy?")
 
 var ASTstring = 'var x = 5\nif(x < 10){\n	x += 1\n    var b = "My Value"\n}\ntest(b)\n'
 
-var pathtracingString = "sphere 0 0 0 2\nsphere -5 5 0 1.5\nsphere 5 5 0 1.5\ncube -5 -5 0 1\ncube -2.5 -6 0 1\ncube 0 -7 0 1\ncube 2.5 -6 0 1\ncube 5 -5 0 1\n"
+var pathtracingString = "sphere 0 0 0 2\nsphere -5 5 0 1.5\nsphere 5 5 0 1.5\ncube -5 -5 0 1\ncube -2.5 -6 0 1\ncube 0 -7 0 1\ncube 2.5 -6 0 1\ncube 5 -5 0 1"
 
 // Code mirror part
 var placeHolderText = pathtracingString;
