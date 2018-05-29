@@ -1,7 +1,7 @@
 module.exports = {
-	parseAST : parseAST,
-	drawErrorAST : drawErrorAST,
-	renderAST : renderAST
+	parse : parseAST,
+	render : renderAST,
+	catchError : drawErrorAST,
 }
 
 var Esprima = require("esprima")

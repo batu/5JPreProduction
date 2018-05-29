@@ -1,8 +1,8 @@
 (function(){function r(e,n,t){function o(i,f){if(!n[i]){if(!e[i]){var c="function"==typeof require&&require;if(!f&&c)return c(i,!0);if(u)return u(i,!0);var a=new Error("Cannot find module '"+i+"'");throw a.code="MODULE_NOT_FOUND",a}var p=n[i]={exports:{}};e[i][0].call(p.exports,function(r){var n=e[i][1][r];return o(n||r)},p,p.exports,r,e,n,t)}return n[i].exports}for(var u="function"==typeof require&&require,i=0;i<t.length;i++)o(t[i]);return o}return r})()({1:[function(require,module,exports){
 module.exports = {
-	parseAST : parseAST,
-	drawErrorAST : drawErrorAST,
-	renderAST : renderAST
+	parse : parseAST,
+	render : renderAST,
+	catchError : drawErrorAST,
 }
 
 var Esprima = require("esprima")
@@ -314,12 +314,12 @@ function drawD3fromTree(tree){
 
 }
 
-},{"esprima":7}],2:[function(require,module,exports){
+},{"esprima":8}],2:[function(require,module,exports){
 module.exports = {
-	parseJSONFDG : parseJSONFDG,
-	parseSimpleFDG : parseSimpleFDG,
-	drawErrorFDG : drawErrorFDG,
-	renderFDG : renderFDG
+	parseJSON : parseJSONFDG,
+	parseSimple : parseSimpleFDG,
+	catchError : drawErrorFDG,
+	render : renderFDG
 }
 
 
@@ -333,7 +333,7 @@ var nodeFont = { 'font-size': fontSize,
 								 'font-family': 'Arial, Helvetica, sans-serif',
 								 'fill': text };
 
-								 
+
 function parseJSONFDG(text){
 	var graph = JSON.parse(text)
 	return graph
@@ -499,6 +499,61 @@ try{
 }
 
 },{}],3:[function(require,module,exports){
+module.exports = {
+	renderIntermediate : renderIntermediate
+}
+
+var fill = '#3AA';
+var stroke = '#FFF';
+var text = '#FFF';
+var line = '#CCC';
+var margin = 30;
+var fontSize = 18;
+var nodeFont = { 'font-size': fontSize,
+								 'font-family': 'Arial, Helvetica, sans-serif',
+								 'fill': text };
+function renderIntermediate(text){
+
+	var container = "#drawArea"
+  console.log(text)
+	var message = text;
+	if(!message){
+		message = "Start coding to see what the program sees!"
+	}
+	d3.select(container)
+		.select("svg")
+		.remove()
+
+	var svg = d3.select(container).append("svg");
+
+	var svg_witdh = 1000
+	var svg_height = 1000
+
+	svg.attr("width", svg_witdh);
+	svg.attr("height", svg_height);
+
+	d3.select('svg')
+		.append('rect')
+			.classed('node', true)
+			.attr('x', svg_witdh / 2 - 300)
+			.attr('y', svg_height / 4 - 100)
+			.attr('height', 200)
+			.attr('width', 600)
+			.attr("fill", "#3AA")
+
+	d3.select('svg')
+		.append("text")
+			.attr("x", svg_witdh / 2)
+			.attr("y", svg_height / 4)
+			.attr("text-anchor", "middle")
+			.text(function(text) {return message})
+			.attr("font-family", nodeFont["font-family"])
+			.attr('fill', nodeFont["fill"])
+			.attr("font-size", nodeFont["font-sis"])
+
+}
+
+},{}],4:[function(require,module,exports){
 function parseCoordinates(text){
   var lines = text.split("\n")
   var objects = []
@@ -1850,8 +1905,8 @@ if(gl) {
 }
 
 module.exports = {
-  parseCoordinates : parseCoordinates,
-  renderPathTracing : renderPathTracing,
+  parse : parseCoordinates,
+  render : renderPathTracing,
 }
 
 
@@ -1862,10 +1917,11 @@ module.exports = {
 // <br><button onclick="javascript:ui.setObjects(makeTableAndChair())">Table and Chair</button>
 // <br><button onclick="javascript:ui.setObjects(makeStacks())">Stacks</button>
 
-},{}],4:[function(require,module,exports){
+},{}],5:[function(require,module,exports){
 var fdg = require('./ParsersAndRenderers/fdg.js');
 var ast = require('./ParsersAndRenderers/ast.js');
 var pathtracing = require('./ParsersAndRenderers/pathtracing.js');
+var intermediate = require('./ParsersAndRenderers/intermediate.js');
 
 var simpleParseString = "hat_1 = brown\nhat_2 = brown\nhead_1 = teal\nhead_2 = teal\nchin = teal\n\nhat_1 -> hat_2\nhead_1 -> chin\nchin -> head_2\nhead_1 -> hat_1\nhat_2 -> head_2\n\nbody = blue\nbelly = blue\narm_l = blue\narm_r = blue\nhand_l = teal\nhand_r = teal\n\nchin -> body\nbody -> belly\nbody -> arm_l\nbody -> arm_r\narm_r -> hand_r\narm_l -> hand_l\n\npelvis = red\nleg_r = red\nleg_l = red\nfoot_l = teal\nfoot_r = teal\n\nbelly -> pelvis\npelvis -> leg_r\npelvis -> leg_l\nleg_l -> foot_l\nleg_r -> foot_r\n"
 
@@ -1880,19 +1936,77 @@ var placeHolderText = JSONParseString;
 var isJSON = false;
 
 var isAST = false;
-var activeParseFunction = pathtracing.parseCoordinates;
-var activeRenderFunction = pathtracing.renderPathTracing;
-var activeErrorFunction = fdg.drawErrorFDG;
+var activeParseFunction = fdg.parse;
+var activeRenderFunction = fdg.render;
+var activeErrorFunction = fdg.catchError;
 
 
 var parentElement = parentElement = document.getElementById('drawArea');
 var dimensions = [parentElement.clientWidth, parentElement.clientHeight];
 
-//.addEventListener("change", myScript);
+d3.select('#parser').on('change',parserUpdate);
+d3.select('#renderer').on('change',rendererUpdate);
 
-function parserOrRendererUpdate(){
-	console.log('changed')
+
+// <option value="0" selected>SimpleParse</option>
+// <option value="1">JSON</option>
+// <option value="2">AST</option>
+// <option value="3">Coordinate</option>
+function parserUpdate(){
+		var parserValue = d3.select('#parser').node().value;
+		parserValue = parseInt(parserValue);
+
+		switch(parserValue) {
+    case 0:
+        activeParseFunction = fdg.parseSimple;
+
+				localStorage['FDGtext'] = simpleParseString;
+				myCodeMirror.setValue(simpleParseString);
+				break;
+    case 1:
+        activeParseFunction = fdg.parseJSON;
+
+				localStorage['FDGtext'] = JSONParseString;
+				myCodeMirror.setValue(JSONParseString);
+        break;
+		case 2:
+				activeParseFunction = ast.parse;
+				break;
+		case 3:
+				activeParseFunction = pathtracing.parse;
+				break;
+			}
+		console.log(activeParseFunction)
 }
+
+// <option value="0" selected>FDG</option>
+// <option value="1">AST</option>
+// <option value="2">Pathtracing</option>
+function rendererUpdate(){
+		var rendererValue = d3.select('#renderer').node().value;
+		rendererValue = parseInt(rendererValue);
+
+		switch(rendererValue) {
+    case 0:
+        activeRenderFunction = fdg.render;
+				console.log("in 0")
+
+				activeErrorFunction = fdg.catchError;
+        break;
+    case 1:
+        activeRenderFunction = ast.render;
+				console.log("in 1")
+
+				activeErrorFunction = ast.catchError;
+				localStorage['FDGtext'] = ASTstring;
+				myCodeMirror.setValue(ASTstring);
+        break;
+		case 2:
+				activeRenderFunction = pathtracing.render;
+				break;
+			}
+}
+
 
 
 if (localStorage['FDGtext'] !== undefined){
@@ -1905,6 +2019,8 @@ var myCodeMirror = CodeMirror(document.getElementById("codeeditor"), {
 	lineNumbers: true,
 });
 
+rendererUpdate()
+parserUpdate()
 parseAndRender();
 
 myCodeMirror.on("change", function(){
@@ -1935,13 +2051,13 @@ d3.select('#toggleParserButton').on('click', function(){
 		elem.innerHTML = "switch to SimpleParse"
 		localStorage['FDGtext'] = JSONParseString;
 		myCodeMirror.setValue(JSONParseString);
-		activeParseFunction = fdg.parseJSONFDG;
+		activeParseFunction = fdg.parseJSON;
 	}else{
 		var elem = document.getElementById('toggleParserButton');
 		elem.innerHTML = "switch to JSON parsing"
 		localStorage['FDGtext'] = simpleParseString;
 		myCodeMirror.setValue(simpleParseString);
-		activeParseFunction = fdg.parseSimpleFDG;
+		activeParseFunction = fdg.parseSimple;
 	}
 	parseAndRender();
 });
@@ -1952,26 +2068,25 @@ d3.select('#toggleParseRenderGroup').on('click', function(){
 	var elem = document.getElementById('toggleParseRenderGroup');
 	if(isAST){
 		elem.innerHTML = "switch to FDG"
-		activeParseFunction = ast.parseAST;
-		activeRenderFunction = ast.renderAST;
-		activeErrorFunction = ast.drawErrorAST;
+		activeParseFunction = ast.parse;
+		activeRenderFunction = ast.render;
+		activeErrorFunction = ast.catchError;
 		localStorage['FDGtext'] = ASTstring;
 		myCodeMirror.setValue(ASTstring);
-		document.getElementById('toggleParserButton').disabled = true;
 	}else{
 		elem.innerHTML = "switch to AST"
 		document.getElementById('toggleParserButton').disabled = false;
 		if(isJSON){
 			localStorage['FDGtext'] = JSONParseString;
 			myCodeMirror.setValue(JSONParseString);
-			activeParseFunction = fdg.parseJSONFDG;
+			activeParseFunction = fdg.parseJSON;
 		}else{
 			localStorage['FDGtext'] = JSONParseString;
 			myCodeMirror.setValue(JSONParseString);
-			activeParseFunction = fdg.parseJSONFDG;
+			activeParseFunction = fdg.parseJSON;
 		}
-		activeRenderFunction = fdg.renderFDG;
-		activeErrorFunction = fdg.drawErrorFDG;
+		activeRenderFunction = fdg.render;
+		activeErrorFunction = fdg.catchError;
 	}
 
 	parseAndRender();
@@ -1983,6 +2098,7 @@ function parseAndRender(){
 	var graph = {"nodes":[],
 	"links":[]};
 
+	console.log(activeParseFunction)
 	try {
 		var graph = Parse(activeParseFunction, code_text)
 	} catch (e) {
@@ -1992,7 +2108,7 @@ function parseAndRender(){
 
 	// https://javascriptstore.com/2017/10/15/visualize-ast-javascript/
 	// declares a tree layout and assigns the size
-	if (!parseError && graph.length != 0) {
+	if (!parseError && graph !== undefined && graph.length != 0) {
 		Render(activeRenderFunction, graph)
 	}else{
 		console.log(graph["errorMessage"])
@@ -2115,7 +2231,7 @@ function svgString2Image( svgString, width, height, format, callback ) {
 	image.src = imgsrc;
 }
 
-},{"./ParsersAndRenderers/ast.js":1,"./ParsersAndRenderers/fdg.js":2,"./ParsersAndRenderers/pathtracing.js":3}],5:[function(require,module,exports){
+},{"./ParsersAndRenderers/ast.js":1,"./ParsersAndRenderers/fdg.js":2,"./ParsersAndRenderers/intermediate.js":3,"./ParsersAndRenderers/pathtracing.js":4}],6:[function(require,module,exports){
 // augment Sylvester some
 Matrix.Translation = function (v)
 {
@@ -2310,7 +2426,7 @@ function makeOrtho(left, right, bottom, top, znear, zfar)
 }
 
 
-},{}],6:[function(require,module,exports){
+},{}],7:[function(require,module,exports){
 // === Sylvester ===
 // Vector and Matrix mathematics modules for JavaScript
 // Copyright (c) 2007 James Coglan
@@ -3566,7 +3682,7 @@ var $M = Matrix.create;
 var $L = Line.create;
 var $P = Plane.create;
 
-},{}],7:[function(require,module,exports){
+},{}],8:[function(require,module,exports){
 (function webpackUniversalModuleDefinition(root, factory) {
 /* istanbul ignore next */
 	if(typeof exports === 'object' && typeof module === 'object')
@@ -10267,4 +10383,4 @@ return /******/ (function(modules) { // webpackBootstrap
 /******/ ])
 });
 ;
-},{}]},{},[4,2,1,5,6,3]);
+},{}]},{},[5,2,1,6,7,4,3]);

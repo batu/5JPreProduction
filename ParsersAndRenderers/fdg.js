@@ -1,8 +1,8 @@
 module.exports = {
-	parseJSONFDG : parseJSONFDG,
-	parseSimpleFDG : parseSimpleFDG,
-	drawErrorFDG : drawErrorFDG,
-	renderFDG : renderFDG
+	parseJSON : parseJSONFDG,
+	parseSimple : parseSimpleFDG,
+	catchError : drawErrorFDG,
+	render : renderFDG
 }
 
 
@@ -16,7 +16,7 @@ var nodeFont = { 'font-size': fontSize,
 								 'font-family': 'Arial, Helvetica, sans-serif',
 								 'fill': text };
 
-								 
+
 function parseJSONFDG(text){
 	var graph = JSON.parse(text)
 	return graph

@@ -1349,8 +1349,8 @@ if(gl) {
 }
 
 module.exports = {
-  parseCoordinates : parseCoordinates,
-  renderPathTracing : renderPathTracing,
+  parse : parseCoordinates,
+  render : renderPathTracing,
 }
 
 

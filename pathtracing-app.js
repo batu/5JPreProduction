@@ -1,6 +1,7 @@
 var fdg = require('./ParsersAndRenderers/fdg.js');
 var ast = require('./ParsersAndRenderers/ast.js');
 var pathtracing = require('./ParsersAndRenderers/pathtracing.js');
+var intermediate = require('./ParsersAndRenderers/intermediate.js');
 
 var simpleParseString = "hat_1 = brown\nhat_2 = brown\nhead_1 = teal\nhead_2 = teal\nchin = teal\n\nhat_1 -> hat_2\nhead_1 -> chin\nchin -> head_2\nhead_1 -> hat_1\nhat_2 -> head_2\n\nbody = blue\nbelly = blue\narm_l = blue\narm_r = blue\nhand_l = teal\nhand_r = teal\n\nchin -> body\nbody -> belly\nbody -> arm_l\nbody -> arm_r\narm_r -> hand_r\narm_l -> hand_l\n\npelvis = red\nleg_r = red\nleg_l = red\nfoot_l = teal\nfoot_r = teal\n\nbelly -> pelvis\npelvis -> leg_r\npelvis -> leg_l\nleg_l -> foot_l\nleg_r -> foot_r\n"
 
@@ -15,19 +16,77 @@ var placeHolderText = JSONParseString;
 var isJSON = false;
 
 var isAST = false;
-var activeParseFunction = pathtracing.parseCoordinates;
-var activeRenderFunction = pathtracing.renderPathTracing;
-var activeErrorFunction = fdg.drawErrorFDG;
+var activeParseFunction = fdg.parse;
+var activeRenderFunction = fdg.render;
+var activeErrorFunction = fdg.catchError;
 
 
 var parentElement = parentElement = document.getElementById('drawArea');
 var dimensions = [parentElement.clientWidth, parentElement.clientHeight];
 
-//.addEventListener("change", myScript);
+d3.select('#parser').on('change',parserUpdate);
+d3.select('#renderer').on('change',rendererUpdate);
 
-function parserOrRendererUpdate(){
-	console.log('changed')
+
+// <option value="0" selected>SimpleParse</option>
+// <option value="1">JSON</option>
+// <option value="2">AST</option>
+// <option value="3">Coordinate</option>
+function parserUpdate(){
+		var parserValue = d3.select('#parser').node().value;
+		parserValue = parseInt(parserValue);
+
+		switch(parserValue) {
+    case 0:
+        activeParseFunction = fdg.parseSimple;
+
+				localStorage['FDGtext'] = simpleParseString;
+				myCodeMirror.setValue(simpleParseString);
+				break;
+    case 1:
+        activeParseFunction = fdg.parseJSON;
+
+				localStorage['FDGtext'] = JSONParseString;
+				myCodeMirror.setValue(JSONParseString);
+        break;
+		case 2:
+				activeParseFunction = ast.parse;
+				break;
+		case 3:
+				activeParseFunction = pathtracing.parse;
+				break;
+			}
+		console.log(activeParseFunction)
 }
+
+// <option value="0" selected>FDG</option>
+// <option value="1">AST</option>
+// <option value="2">Pathtracing</option>
+function rendererUpdate(){
+		var rendererValue = d3.select('#renderer').node().value;
+		rendererValue = parseInt(rendererValue);
+
+		switch(rendererValue) {
+    case 0:
+        activeRenderFunction = fdg.render;
+				console.log("in 0")
+
+				activeErrorFunction = fdg.catchError;
+        break;
+    case 1:
+        activeRenderFunction = ast.render;
+				console.log("in 1")
+
+				activeErrorFunction = ast.catchError;
+				localStorage['FDGtext'] = ASTstring;
+				myCodeMirror.setValue(ASTstring);
+        break;
+		case 2:
+				activeRenderFunction = pathtracing.render;
+				break;
+			}
+}
+
 
 
 if (localStorage['FDGtext'] !== undefined){
@@ -40,6 +99,8 @@ var myCodeMirror = CodeMirror(document.getElementById("codeeditor"), {
 	lineNumbers: true,
 });
 
+rendererUpdate()
+parserUpdate()
 parseAndRender();
 
 myCodeMirror.on("change", function(){
@@ -70,13 +131,13 @@ d3.select('#toggleParserButton').on('click', function(){
 		elem.innerHTML = "switch to SimpleParse"
 		localStorage['FDGtext'] = JSONParseString;
 		myCodeMirror.setValue(JSONParseString);
-		activeParseFunction = fdg.parseJSONFDG;
+		activeParseFunction = fdg.parseJSON;
 	}else{
 		var elem = document.getElementById('toggleParserButton');
 		elem.innerHTML = "switch to JSON parsing"
 		localStorage['FDGtext'] = simpleParseString;
 		myCodeMirror.setValue(simpleParseString);
-		activeParseFunction = fdg.parseSimpleFDG;
+		activeParseFunction = fdg.parseSimple;
 	}
 	parseAndRender();
 });
@@ -87,26 +148,25 @@ d3.select('#toggleParseRenderGroup').on('click', function(){
 	var elem = document.getElementById('toggleParseRenderGroup');
 	if(isAST){
 		elem.innerHTML = "switch to FDG"
-		activeParseFunction = ast.parseAST;
-		activeRenderFunction = ast.renderAST;
-		activeErrorFunction = ast.drawErrorAST;
+		activeParseFunction = ast.parse;
+		activeRenderFunction = ast.render;
+		activeErrorFunction = ast.catchError;
 		localStorage['FDGtext'] = ASTstring;
 		myCodeMirror.setValue(ASTstring);
-		document.getElementById('toggleParserButton').disabled = true;
 	}else{
 		elem.innerHTML = "switch to AST"
 		document.getElementById('toggleParserButton').disabled = false;
 		if(isJSON){
 			localStorage['FDGtext'] = JSONParseString;
 			myCodeMirror.setValue(JSONParseString);
-			activeParseFunction = fdg.parseJSONFDG;
+			activeParseFunction = fdg.parseJSON;
 		}else{
 			localStorage['FDGtext'] = JSONParseString;
 			myCodeMirror.setValue(JSONParseString);
-			activeParseFunction = fdg.parseJSONFDG;
+			activeParseFunction = fdg.parseJSON;
 		}
-		activeRenderFunction = fdg.renderFDG;
-		activeErrorFunction = fdg.drawErrorFDG;
+		activeRenderFunction = fdg.render;
+		activeErrorFunction = fdg.catchError;
 	}
 
 	parseAndRender();
@@ -118,6 +178,7 @@ function parseAndRender(){
 	var graph = {"nodes":[],
 	"links":[]};
 
+	console.log(activeParseFunction)
 	try {
 		var graph = Parse(activeParseFunction, code_text)
 	} catch (e) {
@@ -127,7 +188,7 @@ function parseAndRender(){
 
 	// https://javascriptstore.com/2017/10/15/visualize-ast-javascript/
 	// declares a tree layout and assigns the size
-	if (!parseError && graph.length != 0) {
+	if (!parseError && graph !== undefined && graph.length != 0) {
 		Render(activeRenderFunction, graph)
 	}else{
 		console.log(graph["errorMessage"])
