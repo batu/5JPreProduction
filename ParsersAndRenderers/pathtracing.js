@@ -39,23 +39,26 @@ function renderPathTracing(list){
           drawObject.r);
         }
       }
+    ui.display();
     }
 
+
+
+UI.prototype.display = function() {
+  this.renderer.setObjects(this.objects);
+};
 
 UI.prototype.deleteAll = function() {
   this.objects = [];
   this.objects.splice(0, 0, new Light());
-  this.renderer.setObjects(this.objects);
 };
 
 UI.prototype.addSphereAtLocation = function(x, y, z, r) {
   this.objects.push(new Sphere(Vector.create([x, y, z]), r, nextObjectId++));
-  this.renderer.setObjects(this.objects);
 };
 
 UI.prototype.addCubeAtLocation = function(x, y, z, r) {
   this.objects.push(new Cube(Vector.create([x - r, y - r, z - r]), Vector.create([x + r, y + r, z + r]), nextObjectId++));
-  this.renderer.setObjects(this.objects);
 };
 
 
