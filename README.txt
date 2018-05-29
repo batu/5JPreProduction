@@ -37,4 +37,4 @@ browserify app.js  ParsersAndRenderers/yourparser.js ParsersAndRenderers/otherpa
 ## Watchify ##
 I recommend using Watchify to automatically call browserify whenever a chance is made.
 
-watchify app.js ParsersAndRenderers/fdg.js ParsersAndRenderers/ast.js -o bundle.js
+watchify pathtracing-app.js ParsersAndRenderers/fdg.js ParsersAndRenderers/ast.js raytracing/glUtils.js raytracing/sylvester.src.js  ParsersAndRenderers/pathtracing.js -o pathtracing-bundle.js

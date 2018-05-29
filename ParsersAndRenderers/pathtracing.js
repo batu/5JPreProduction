@@ -18,15 +18,18 @@ function parseCoordinates(text){
 }
 
 function renderPathTracing(list){
+  console.log(list)
   ui.deleteAll();
   for (var i = 0; i < list.length; i++){
     var drawObject = list[i];
     if(drawObject.type == "cube"){
+      console.log("Drew Cube!");
       ui.addCubeAtLocation(drawObject.x,
         drawObject.y,
         drawObject.z,
         drawObject.r);
       }else if(drawObject.type == "sphere"){
+        console.log("Drew sphere!");
         ui.addSphereAtLocation(drawObject.x,
           drawObject.y,
           drawObject.z,
