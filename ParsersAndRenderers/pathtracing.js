@@ -11,12 +11,11 @@ function parseCoordinates(text){
       throw error
     }
     //console.log(splits)
-    object.type = splits[0] / 10;
+    object.type = splits[0];
     object.x = splits[1] / 10;
     object.y = splits[2] / 10;
     object.z = splits[3] / 10;
     object.r = splits[4] / 10;
-
     objects.push(object);
 	}
   return objects;
