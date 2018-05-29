@@ -27,7 +27,6 @@ function getMaxWidth(root_node){
 	var nextNodes = [];
 	var maxWidth = 0;
 	while( currNodes.length != 0) {
-		console.log(currNodes);
 		for(var i = 0; i < currNodes.length; i++){
 			for(var j = 0; j < currNodes[i]["children"].length; j++){
 				nextNodes.push(currNodes[i]["children"][j]);
@@ -197,7 +196,6 @@ function removeEmptyNodes(node){
 		var index = node["parent"]["children"].indexOf(node);
 		if (index > -1) {
 			node["parent"]["children"].splice(index, 1);
-			console.log(node["parent"]["children"])
 		}
 	}
 
@@ -214,14 +212,12 @@ function removeEmptyNodes(node){
 function fixAssignment(node){
 
 	if(node.parent && (node.parent.text == "var")){
-		console.log(node.parent.text)
 
 		for (var i = 0; i < node["children"].length; i++) {
 			node["children"][i]["parent"] = node["parent"]
 			node["parent"]["children"].push(node["children"][i])
 		}
 		node["children"].splice(0, 1);
-		console.log(node["parent"]["children"])
 
 	}
 
@@ -238,7 +234,6 @@ function fixAssignment(node){
 function fixElse(node){
 
 	if(node.parent && (node.parent.text == "If") && (node.text == "" ) ){
-		console.log(node.parent.text);
 		node.text = "Else";
 	}
 

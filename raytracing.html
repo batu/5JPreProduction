@@ -36,35 +36,38 @@
     <script type="text/javascript" src="raytracing/sylvester.src.js"></script>
     <script type="text/javascript" src="raytracing/glUtils.js"></script>
 
+    <script type="text/javascript" src="lib/svg_save.js"></script>
+
   </head>
   <body>
     <p>This is the home page for the 5J Web application. </p>
-    <div id="codeeditor"></div>
-    <div>
-      <button id='saveButton'>Export my D3 visualization to PNG</button>
-    </div>
-    <div>
-      <button id='toggleParserButton'>switch to JSON</button>
-    </div>
-
-    <div>
-      <button id='toggleParseRenderGroup'>switch to AST</button>
-    </div>
+    <b>View:</b>
+    <select id="comboSelection">
+      <option value="FDG_S">FDG with Simple Parser</option>
+      <option value="FDG_J">FDG with JSON Parsing</option>
+      <option value="AST">AST</option>
+      <option value="PATHTRACING" selected>Path Tracing</option>
+    </select>
 
     <b>Parser:</b>
     <select id="parser">
-      <option value="0" selected>SimpleParse</option>
-      <option value="1">JSON</option>
-      <option value="2">AST</option>
-      <option value="3">Coordinate</option>
+      <option value="SIMPLE">SimpleParse</option>
+      <option value="JSON">JSON</option>
+      <option value="AST">AST</option>
+      <option value="PATHTRACING" selected>Coordinate</option>
     </select>
 
     <b>Interpreter:</b>
     <select id="renderer">
-      <option value="0" selected>FDG</option>
-      <option value="1">AST</option>
-      <option value="2">Pathtracing</option>
+      <option value="FDG">FDG</option>
+      <option value="AST">AST</option>
+      <option value="PATHTRACING" selected>Pathtracing</option>
     </select>
+
+    <div id="codeeditor"></div>
+    <div>
+      <button id='saveButton'>Export my D3 visualization to PNG</button>
+    </div>
 
     <div id="main">
       <canvas id="canvas" width="512" height="512"></canvas>
@@ -90,8 +93,6 @@
       </p>
     </div>
     <div id="drawArea" style="width:1200px; height:1200px;">
-
-
-    <script src="pathtracing-bundle.js"></script>
   </body>
+  <script src="pathtracing-bundle.js"></script>
 </html>
