@@ -23,7 +23,6 @@ function parseCoordinates(text){
 }
 
 function renderPathTracing(list){
-  console.log(list)
   ui.deleteAll();
   for (var i = 0; i < list.length; i++){
     var drawObject = list[i];

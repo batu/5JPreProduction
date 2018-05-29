@@ -524,7 +524,6 @@ function parseCoordinates(text){
 }
 
 function renderPathTracing(list){
-  console.log(list)
   ui.deleteAll();
   for (var i = 0; i < list.length; i++){
     var drawObject = list[i];
@@ -1891,7 +1890,7 @@ var parentElement = parentElement = document.getElementById('drawArea');
 var dimensions = [parentElement.clientWidth, parentElement.clientHeight];
 
 //.addEventListener("change", myScript);
-console.log(pathtracing)
+
 function parserOrRendererUpdate(){
 	console.log('changed')
 }
@@ -1984,7 +1983,7 @@ function parseAndRender(){
 	var parseError = false;
 	var graph = {"nodes":[],
 	"links":[]};
-	console.log(activeParseFunction)
+
 	try {
 		var graph = Parse(activeParseFunction, code_text)
 	} catch (e) {
