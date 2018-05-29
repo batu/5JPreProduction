@@ -503,10 +503,16 @@ function parseCoordinates(text){
   var lines = text.split("\n")
   var objects = []
 	for(var i = 0; i < lines.length; i++){
+
     var object = {};
 		var line = lines[i];
     var splits = line.split(" ")
-
+    if (splits.length != 5){
+      console.log("throwing an error")
+      var error = {message: "Parsing format should be <type x y z radius> at every line."}
+      throw error
+    }
+    //console.log(splits)
     object.type = splits[0];
     object.x = splits[1];
     object.y = splits[2];
@@ -1885,6 +1891,11 @@ var activeErrorFunction = fdg.drawErrorFDG;
 var parentElement = parentElement = document.getElementById('drawArea');
 var dimensions = [parentElement.clientWidth, parentElement.clientHeight];
 
+//.addEventListener("change", myScript);
+
+function parserOrRendererUpdate(){
+	console.log('changed')
+}
 
 
 if (localStorage['FDGtext'] !== undefined){

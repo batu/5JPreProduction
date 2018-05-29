@@ -51,46 +51,46 @@
       <button id='toggleParseRenderGroup'>switch to AST</button>
     </div>
 
-    <b>Parser:</b>
-    <select id="parser">
-      <option value="0" selected>SimpleParse</option>
-      <option value="1">JSON</option>
-      <option value="2">AST</option>
-      <option value="3">Coordinate</option>
-    </select>
-
-    <b>Interpreter:</b>
-    <select id="Renderer">
-      <option value="0" selected>AST</option>
-      <option value="1">FDG</option>
-      <option value="2">Pathtracing</option>
-    </select>
-
-    <div id="main">
-      <canvas id="canvas" width="512" height="512"></canvas>
-      <div id="error"><noscript>Please enable JavaScript.</noscript></div>
-
-      <p>
-        <b>Material:</b>
-        <select id="material">
-          <option value="0" selected>Diffuse</option>
-          <option value="1">Mirror</option>
-          <option value="2">Glossy</option>
-        </select>
-        <span id="glossiness-factor">
-          <br>with glossiness factor: 0 &lt; <input id="glossiness" value="0.6"> &lt; 1
-        </span>
-        <br>
-
-        <b>Environment:</b>
-        <select id="environment">
-          <option value="0" selected>Cornell Box - Yellow and Blue</option>
-          <option value="1">Cornell Box - Red and Green</option>
-        </select>
-      </p>
-    </div>
     <div id="drawArea" style="width:1200px; height:1200px;">
+      <div id="main">
+        <canvas id="canvas" width="512" height="512"></canvas>
+        <div id="error"><noscript>Please enable JavaScript.</noscript></div>
 
+        <p>
+          <button onclick="javascript:ui.selectLight()">Select Light</button>
+          <button onclick="javascript:ui.addSphere()">Add Sphere</button>
+          <button onclick="javascript:ui.addCube()">Add Cube</button>
+        </p>
+
+        <p>
+          <b>Material:</b>
+          <select id="material">
+            <option value="0" selected>Diffuse</option>
+            <option value="1">Mirror</option>
+            <option value="2">Glossy</option>
+          </select>
+          <span id="glossiness-factor">
+            <br>with glossiness factor: 0 &lt; <input id="glossiness" value="0.6"> &lt; 1
+          </span>
+          <br>
+
+          <b>Environment:</b>
+          <select id="environment">
+            <option value="0" selected>Cornell Box - Yellow and Blue</option>
+            <option value="1">Cornell Box - Red and Green</option>
+          </select>
+        </p>
+
+        <p>
+          <b>Load preset scene:</b>
+          <br><button onclick="javascript:ui.setObjects(makeSphereColumn())">Sphere Column</button>
+          <br><button onclick="javascript:ui.setObjects(makeSpherePyramid())">Sphere Pyramid</button>
+          <br><button onclick="javascript:ui.setObjects(makeSphereAndCube())">Sphere and Cube</button>
+          <br><button onclick="javascript:ui.setObjects(makeCubeAndSpheres())">Cube and Spheres</button>
+          <br><button onclick="javascript:ui.setObjects(makeTableAndChair())">Table and Chair</button>
+          <br><button onclick="javascript:ui.setObjects(makeStacks())">Stacks</button>
+        </p>
+      </div>
 
     <script src="pathtracing-bundle.js"></script>
   </body>

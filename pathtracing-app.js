@@ -23,6 +23,11 @@ var activeErrorFunction = fdg.drawErrorFDG;
 var parentElement = parentElement = document.getElementById('drawArea');
 var dimensions = [parentElement.clientWidth, parentElement.clientHeight];
 
+//.addEventListener("change", myScript);
+
+function parserOrRendererUpdate(){
+	console.log('changed')
+}
 
 
 if (localStorage['FDGtext'] !== undefined){
