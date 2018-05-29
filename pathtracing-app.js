@@ -1,5 +1,6 @@
 var fdg = require('./ParsersAndRenderers/fdg.js');
 var ast = require('./ParsersAndRenderers/ast.js');
+var pathtracing = require('./ParsersAndRenderers/pathtracing.js');
 
 var simpleParseString = "hat_1 = brown\nhat_2 = brown\nhead_1 = teal\nhead_2 = teal\nchin = teal\n\nhat_1 -> hat_2\nhead_1 -> chin\nchin -> head_2\nhead_1 -> hat_1\nhat_2 -> head_2\n\nbody = blue\nbelly = blue\narm_l = blue\narm_r = blue\nhand_l = teal\nhand_r = teal\n\nchin -> body\nbody -> belly\nbody -> arm_l\nbody -> arm_r\narm_r -> hand_r\narm_l -> hand_l\n\npelvis = red\nleg_r = red\nleg_l = red\nfoot_l = teal\nfoot_r = teal\n\nbelly -> pelvis\npelvis -> leg_r\npelvis -> leg_l\nleg_l -> foot_l\nleg_r -> foot_r\n"
 
@@ -14,8 +15,8 @@ var placeHolderText = JSONParseString;
 var isJSON = false;
 
 var isAST = false;
-var activeParseFunction = fdg.parseSimpleFDG;
-var activeRenderFunction = fdg.renderFDG;
+var activeParseFunction = pathtracing.parseCoordinates;
+var activeRenderFunction = pathtracing.renderPathTracing;
 var activeErrorFunction = fdg.drawErrorFDG;
 
 

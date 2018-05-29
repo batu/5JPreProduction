@@ -1,3 +1,21 @@
+function parseCoordinates(text){
+  var lines = text.split("\n")
+  var objects = []
+	for(var i = 0; i < lines.length; i++){
+    var object = {};
+		var line = lines[i];
+    var splits = line.split(" ")
+
+    object.type = splits[0];
+    object.x = splits[1];
+    object.y = splits[2];
+    object.z = splits[3];
+    object.r = splits[4];
+
+    objects.push(object);
+	}
+  return objects;
+}
 
 function renderPathTracing(list){
   ui.deleteAll();
@@ -1325,6 +1343,7 @@ if(gl) {
 }
 
 module.exports = {
+  parseCoordinates : parseCoordinates,
   renderPathTracing : renderPathTracing,
 }
 
