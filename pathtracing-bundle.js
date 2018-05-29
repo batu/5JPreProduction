@@ -508,7 +508,6 @@ function parseCoordinates(text){
 		var line = lines[i];
     var splits = line.split(" ")
     if (splits.length != 5){
-      console.log("throwing an error")
       var error = {message: "Parsing format should be <type x y z radius> at every line."}
       throw error
     }
