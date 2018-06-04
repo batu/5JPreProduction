@@ -1,30 +1,19 @@
+
 var fdg = require('./ParsersAndRenderers/fdg.js');
 var ast = require('./ParsersAndRenderers/ast.js');
+var yaml = require('./ParsersAndRenderers/yaml.js');
 var pathtracing = require('./ParsersAndRenderers/pathtracing.js');
 var intermediate = require('./ParsersAndRenderers/intermediate.js');
 
-
-// TODO: put these into the modules.
-var simpleParseString = "hat_1 = brown\nhat_2 = brown\nhead_1 = teal\nhead_2 = teal\nchin = teal\n\nhat_1 -> hat_2\nhead_1 -> chin\nchin -> head_2\nhead_1 -> hat_1\nhat_2 -> head_2\n\nbody = blue\nbelly = blue\narm_l = blue\narm_r = blue\nhand_l = teal\nhand_r = teal\n\nchin -> body\nbody -> belly\nbody -> arm_l\nbody -> arm_r\narm_r -> hand_r\narm_l -> hand_l\n\npelvis = red\nleg_r = red\nleg_l = red\nfoot_l = teal\nfoot_r = teal\n\nbelly -> pelvis\npelvis -> leg_r\npelvis -> leg_l\nleg_l -> foot_l\nleg_r -> foot_r\n"
-
-var JSONParseString = '{\n	  "nodes": [\n	    {"id": "Head_1",   "color": "brown"},\n	    {"id": "Head_2",      "color": "brown"},\n	    {"id": "Head_3",  "color": "brown"},\n	    {"id": "Face_1", "color": "teal"},\n	    {"id": "Face_2", "color": "teal"},\n	    {"id": "Chin", "color": "teal"},\n\n	    {"id": "Body", "color": "blue"},\n	    {"id": "Belly", "color": "blue"},\n	    {"id": "Arm_L", "color": "blue"},\n	    {"id": "Arm_R", "color": "blue"},\n	    {"id": "Hand_L", "color": "teal"},\n	    {"id": "Hand_R", "color": "teal"},\n\n	    {"id": "Pelvis", "color": "red"},\n	    {"id": "Leg_R", "color": "red"},\n	    {"id": "Leg_L", "color": "red"},\n	    {"id": "Foot_R", "color": "teal"},\n	    {"id": "Foot_L", "color": "teal"}\n	 ],\n	  "links": [\n	    {"source": "Head_1", "target": "Head_2", "value": 10},\n	    {"source": "Head_2", "target": "Head_3", "value": 10},\n	    {"source": "Face_1", "target": "Head_1", "value": 10},\n	    {"source": "Face_2", "target": "Head_3", "value": 10},\n	    {"source": "Face_2", "target": "Chin", "value": 10},\n	    {"source": "Face_1", "target": "Chin", "value": 10},\n\n	    {"source": "Chin", "target": "Body", "value": 10},\n	    {"source": "Body", "target": "Belly", "value": 10},\n	    {"source": "Body", "target": "Arm_L", "value": 10},\n	    {"source": "Body", "target": "Arm_R", "value": 10},\n	    {"source": "Hand_R", "target": "Arm_R", "value": 10},\n	    {"source": "Hand_L", "target": "Arm_L", "value": 10},\n\n	    {"source": "Belly", "target": "Pelvis", "value": 10},\n	    {"source": "Pelvis", "target": "Leg_L", "value": 10},\n	    {"source": "Pelvis", "target": "Leg_R", "value": 10},\n	    {"source": "Foot_R", "target": "Leg_R", "value": 10},\n	    {"source": "Foot_L", "target": "Leg_L", "value": 10}\n	  ]\n	}\n'
-
-console.log("Who whatches the wathitfy?")
-
-var ASTstring = 'var x = 5\nif(x < 10){\n	x += 1\n    var b = "My Value"\n}\ntest(b)\n'
-
-var pathtracingString = "sphere 0 0 0 2\nsphere -5 5 0 1.5\nsphere 5 5 0 1.5\ncube -5 -5 0 1\ncube -2.5 -6 0 1\ncube 0 -7 0 1\ncube 2.5 -6 0 1\ncube 5 -5 0 1"
-
 // Code mirror part
-var placeHolderText = pathtracingString;
+var placeHolderText = pathtracing.pareString;
 
 var isJSON = false;
 
 var isAST = false;
-var activeParseFunction = fdg.parse;
-var activeRenderFunction = fdg.render;
-var activeErrorFunction = fdg.catchError;
-
+var activeParseFunction;
+var activeRenderFunction;
+var activeErrorFunction;
 
 var parentElement = parentElement = document.getElementById('drawArea');
 var dimensions = [parentElement.clientWidth, parentElement.clientHeight];
@@ -44,21 +33,33 @@ var myCodeMirror = CodeMirror(document.getElementById("codeeditor"), {
 	lineNumbers: true,
 });
 
-rendererUpdate()
-parserUpdate()
-parseAndRender();
+
 
 myCodeMirror.on("change", function(){
 	localStorage['FDGtext'] = myCodeMirror.getValue();
 	parseAndRender();
 });
 
+Start();
+
+function Start(){
+	if(location.hash){
+		console.log("I AM HERE!")
+		updateFromHashFragment();
+	}else{
+		comboUpdate();
+	}
+}
 
 function parseAndRender(){
 	code_text = myCodeMirror.getValue();
 	var parseError = false;
 	var graph;
 
+	// console.log(yaml.parse(code_text))
+	d3.select("#drawArea")
+		.select("svg")
+		.remove()
 	try {
 		graph = Parse(activeParseFunction, code_text)
 	} catch (e) {
@@ -66,12 +67,18 @@ function parseAndRender(){
 		graph = {'errorMessage': e.message, 'errorObject': e};
 	}
 
-	if (!parseError && graph !== undefined && graph.length != 0) {
-		Render(activeRenderFunction, graph)
-	}else{
-		console.log(graph["errorMessage"])
-		RenderError(activeErrorFunction, graph);
+	try{
+		if (!parseError && graph !== undefined && graph.length != 0) {
+			Render(activeRenderFunction, graph)
+		}else{
+				console.log(graph["errorMessage"])
+				RenderError(activeErrorFunction, graph);
+		}
 	}
+	catch(e){
+		drawDefaultError(e);
+	}
+	updateHashFragment();
 }
 
 
@@ -89,6 +96,7 @@ function RenderError(errorFunction, graph){
 }
 
 function comboUpdate(){
+
 		var comboSelectionValue = d3.select('#comboSelection').node().value;
 		switch(comboSelectionValue) {
     case "FDG_S":
@@ -108,35 +116,42 @@ function comboUpdate(){
 				changeDropDownValue("renderer", "PATHTRACING");
 				break;
 			}
-		parserUpdate();
 		rendererUpdate();
+		parserUpdate();
 		parseAndRender();
 }
 
 function parserUpdate(){
 		var parserValue = d3.select('#parser').node().value;
+		console.log(parserValue)
 		switch(parserValue) {
     case "SIMPLE":
         activeParseFunction = fdg.parseSimple;
-				localStorage['FDGtext'] = simpleParseString;
-				myCodeMirror.setValue(simpleParseString);
+				localStorage['FDGtext'] = fdg.parseStringSimple;
+				myCodeMirror.setValue(fdg.parseStringSimple);
+				break;
+		case "YAML":
+	      activeParseFunction = yaml.parse;
+				localStorage['FDGtext'] = yaml.parseString;
+				myCodeMirror.setValue(yaml.parseString);
 				break;
     case "JSON":
         activeParseFunction = fdg.parseJSON;
-				localStorage['FDGtext'] = JSONParseString;
-				myCodeMirror.setValue(JSONParseString);
+				localStorage['FDGtext'] = fdg.parseStringJSON;
+				myCodeMirror.setValue(fdg.parseStringJSON);
         break;
 		case "AST":
 				activeParseFunction = ast.parse;
-				localStorage['FDGtext'] = ASTstring;
-				myCodeMirror.setValue(ASTstring);
+				localStorage['FDGtext'] = ast.parseString;
+				myCodeMirror.setValue(ast.parseString);
 				break;
 		case "PATHTRACING":
 				activeParseFunction = pathtracing.parse;
-				localStorage['FDGtext'] = pathtracingString;
-				myCodeMirror.setValue(pathtracingString);
+				localStorage['FDGtext'] = pathtracing.parseString;
+				myCodeMirror.setValue(pathtracing.parseString);
 				break;
 			}
+		parseAndRender();
 }
 
 function rendererUpdate(){
@@ -158,22 +173,48 @@ function rendererUpdate(){
 				enablePathtracingView();
 				break;
 			}
+		parseAndRender();
 }
 
 function enablePathtracingView(){
 		d3.select('#main').style("display", "block");
 		d3.select('#drawArea').style("display", "none");
-		console.log("enable pathtrace view");
 }
 
 function enableD3View(){
 	d3.select('#main').style("display", "none");
 	d3.select('#drawArea').style("display", "block");
-	console.log("enable pathtrace view");
 }
 
 
+function updateHashFragment(){
+	var hash_string = ""
+	var rendererValue = d3.select('#renderer').node().value;
+	var parserValue = d3.select('#parser').node().value;
 
+	hash_string += parserValue;
+	hash_string += "_"
+	hash_string += rendererValue;
+
+	location.hash = hash_string;
+}
+
+
+function updateFromHashFragment(){
+		var hash_string = location.hash;
+		var splitted = hash_string.split("_")
+		var parser_id = splitted[0].slice(1)
+		var renderer_id = splitted[1]
+		console.log(parser_id)
+		console.log(renderer_id)
+
+		changeDropDownValue("parser", parser_id);
+		changeDropDownValue("renderer", renderer_id);
+
+		rendererUpdate();
+		parserUpdate();
+		parseAndRender();
+}
 d3.select('#saveButton').on('click', function(){
 	var svg = d3.select('svg')
 	var svgString = getSVGString(svg.node());
@@ -194,4 +235,55 @@ function changeDropDownValue(element_id, value){
 	        break;
 	    }
 		}
+}
+
+
+
+
+function drawDefaultError(error){
+	var fill = '#3AA';
+	var stroke = '#FFF';
+	var text = '#FFF';
+	var line = '#CCC';
+	var margin = 30;
+	var fontSize = 18;
+	var nodeFont = { 'font-size': fontSize,
+									 'font-family': 'Arial, Helvetica, sans-serif',
+									 'fill': text };
+
+	var container = "#drawArea"
+
+	var	message = "There is a mismatch between the Parser and Interpreter!"
+
+	d3.select(container)
+		.select("svg")
+		.remove()
+
+	var svg = d3.select(container).append("svg");
+
+	var svg_witdh = 1000
+	var svg_height = 1000
+
+	svg.attr("width", svg_witdh);
+	svg.attr("height", svg_height);
+
+	d3.select('svg')
+		.append('rect')
+			.classed('node', true)
+			.attr('x', svg_witdh / 2 - 300)
+			.attr('y', svg_height / 4 - 100)
+			.attr('height', 200)
+			.attr('width', 600)
+			.attr("fill", "#3AA")
+
+	d3.select('svg')
+		.append("text")
+			.attr("x", svg_witdh / 2)
+			.attr("y", svg_height / 4)
+			.attr("text-anchor", "middle")
+			.text(function(text) {return message})
+			.attr("font-family", nodeFont["font-family"])
+			.attr('fill', nodeFont["fill"])
+			.attr("font-size", nodeFont["font-sis"])
+
 }

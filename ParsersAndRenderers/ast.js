@@ -1,8 +1,12 @@
+var ASTstring = 'var x = 5\nif(x < 10){\n	x += 1\n    var b = "My Value"\n}\ntest(b)\n'
+
 module.exports = {
 	parse : parseAST,
 	render : renderAST,
 	catchError : drawErrorAST,
+	parseString: ASTstring
 }
+
 
 var Esprima = require("esprima")
 
@@ -17,11 +21,106 @@ var nodeFont = { 'font-size': fontSize,
 								 'fill': text };
 
 
+
 function parseAST(text){
   var graph = Esprima.parse(text)
-	return graph
+
+  var tree = {"parent":null,
+							"children":[],
+							"text":""}
+
+	enumerateChildrenForD3Tree(graph, tree);
+	tree = removeEmptyNodes(tree)
+	tree = fixAssignment(tree)
+	tree = fixElse(tree)
+
+	return tree
 }
 
+function renderAST(tree) {
+	drawD3fromTree(tree)
+}
+
+
+function enumerateChildrenForD3Tree(ast, current_node) {
+
+	// Find children of this node
+	var children = [];
+	// The order of these matters
+	// eg in a while statement the test must come before the body
+	var typesToSkip = ["VariableDeclaration", "BinaryExpression", "Identifier", "ExpressionStatement", "AssignmentExpression"]
+
+	var possibleChildProperties = ['test',
+																 'body',
+																 'consequent',
+																 'alternate',
+																 'init',
+																 'declarations',
+																 'left',
+																 'right',
+																 'expression',
+																 'argument',
+																 'arguments'];
+
+	for (var i = 0; i < possibleChildProperties.length; i++) {
+		if (ast.hasOwnProperty(possibleChildProperties[i]) &&	ast[possibleChildProperties[i]] !== null){
+			children = children.concat(ast[possibleChildProperties[i]]);
+
+		}
+	}
+
+	for(var j = 0; j < children.length; j++){
+		current_node["children"].push({"parent":current_node,
+																	 "text":"",
+																	 "children":[]})
+	}
+	// Draw this node
+	addTextToD3Node(ast, current_node);
+
+	for (var i = 0; i < current_node["children"].length; i++) {
+		enumerateChildrenForD3Tree(children[i], current_node["children"][i]);
+	}
+}
+
+function addTextToD3Node(node, current_d3_node) {
+	var renderableTitles = ["IfStatement", "WhileStatement"]
+	var typesToSkip = ["VariableDeclaration", "BinaryExpression", "Identifier", "ExpressionStatement"]
+
+	switch (node.type) {
+		case 'CallExpression':
+			current_d3_node["text"] = "Called " + node.callee.name;
+			break;
+		case 'VariableDeclarator':
+			current_d3_node["text"] = node.id.name;
+			break;
+		case 'IfStatement':
+			current_d3_node["text"] = "If";
+			break;
+		case 'WhileStatement':
+			current_d3_node["text"] = "While";
+			break;
+		case 'Literal':
+			current_d3_node["text"] = node["value"];
+			break;
+		case 'Program':
+			current_d3_node["text"] = "Program"
+			break;
+		case 'ExpressionStatement':
+			current_d3_node["text"] = "Expression"
+			break;
+		case 'FunctionDeclaration':
+			current_d3_node["text"] = "Declare " + node.id.name;
+			break;
+		default:
+			for (var prop in node) {
+				if (node.hasOwnProperty(prop) && prop != 'type' &&
+						typeof node[prop] != 'object') {
+					current_d3_node["text"] = node[prop];
+				}
+			}
+			break;
+	}
+}
 function getMaxWidth(root_node){
 	var currNodes = [root_node];
 	var nextNodes = [];
@@ -80,111 +179,6 @@ function drawErrorAST(ast){
 
 }
 
-function renderAST(ast) {
-
-	function drawAddTextToD3Node(node, current_d3_node) {
-		var renderableTitles = ["IfStatement", "WhileStatement"]
-		var typesToSkip = ["VariableDeclaration", "BinaryExpression", "Identifier", "ExpressionStatement"]
-
-		switch (node.type) {
-			case 'CallExpression':
-				current_d3_node["text"] = "Called " + node.callee.name;
-				break;
-			case 'VariableDeclarator':
-				current_d3_node["text"] = node.id.name;
-				break;
-			case 'IfStatement':
-				current_d3_node["text"] = "If";
-				break;
-			case 'WhileStatement':
-				current_d3_node["text"] = "While";
-				break;
-			case 'Literal':
-				current_d3_node["text"] = node["value"];
-				break;
-			case 'Program':
-				current_d3_node["text"] = "Program"
-				break;
-			case 'ExpressionStatement':
-				current_d3_node["text"] = "Expression"
-				break;
-			case 'FunctionDeclaration':
-				current_d3_node["text"] = "Declare " + node.id.name;
-				break;
-			default:
-				for (var prop in node) {
-					if (node.hasOwnProperty(prop) && prop != 'type' &&
-							typeof node[prop] != 'object') {
-						current_d3_node["text"] = node[prop];
-					}
-				}
-				break;
-		}
-	}
-
-	function enumerateChildrenForD3Tree(ast, current_node) {
-
-		// Find children of this node
-		var children = [];
-		// The order of these matters
-		// eg in a while statement the test must come before the body
-		var typesToSkip = ["VariableDeclaration", "BinaryExpression", "Identifier", "ExpressionStatement", "AssignmentExpression"]
-
-		var possibleChildProperties = ['test',
-																	 'body',
-																	 'consequent',
-																	 'alternate',
-																	 'init',
-																	 'declarations',
-																	 'left',
-																	 'right',
-																	 'expression',
-																	 'argument',
-																	 'arguments'];
-
-		for (var i = 0; i < possibleChildProperties.length; i++) {
-			if (ast.hasOwnProperty(possibleChildProperties[i]) &&	ast[possibleChildProperties[i]] !== null){
-				children = children.concat(ast[possibleChildProperties[i]]);
-
-			}
-		}
-
-		for(var j = 0; j < children.length; j++){
-			current_node["children"].push({"parent":current_node,
-																		 "text":"",
-																	 	 "children":[]})
-		}
-		// console.log(children)
-		// console.log(current_node["children"])
-
-		// Draw this node
-		drawAddTextToD3Node(ast, current_node);
-
-		for (var i = 0; i < current_node["children"].length; i++) {
-			enumerateChildrenForD3Tree(children[i], current_node["children"][i]);
-		}
-	}
-
-	// Send the root node in for enumeration
-
-	container = "#drawArea"
-
-	var scale = 1.5;
-	// set the dimensions and margins of the diagram
-	d3.select(container)
-		.select("svg")
-		.remove()
-
-  var tree = {"parent":null,
-							"children":[],
-							"text":""}
-
-	enumerateChildrenForD3Tree(ast, tree);
-	tree = removeEmptyNodes(tree)
-	tree = fixAssignment(tree)
-	tree = fixElse(tree)
-	drawD3fromTree(tree)
-}
 
 function removeEmptyNodes(node){
 	if(!node["text"]){
@@ -250,23 +244,29 @@ function fixElse(node){
 var svg_witdh;
 var svg_height;
 function drawD3fromTree(tree){
-	var max_width = getMaxWidth(tree)
 	var root = d3.hierarchy(tree)
 
+	var container = "#drawArea"
+	var max_width = getMaxWidth(tree) + 1
+	console.log(max_width)
 	var radius = 45
 	var y_margin = radius
-	svg_witdh = max_width * 200;
-	svg_height = root.height * 125 + radius
+	svg_witdh = max_width * 175;
+	svg_height = (root.height) * 125 + radius
+
+	d3.select(container)
+		.select("svg")
+		.remove()
+
 	var svg = d3.select(container).append("svg");
 	svg.attr("width", svg_witdh);
 	svg.attr("height", svg_height);
 
-
 	var treeLayout = d3.tree();
 
 	treeLayout.size([svg_witdh, svg_height - radius * 2]);
-	treeLayout(root);
 
+	treeLayout(root);
 
 		var d3links = d3.select('svg')
 			.selectAll('line.link')
@@ -304,6 +304,5 @@ function drawD3fromTree(tree){
 				.attr("font-family", nodeFont["font-family"])
 				.attr('fill', nodeFont["fill"])
 				.attr("font-size", nodeFont["font-sis"])
-
 
 }

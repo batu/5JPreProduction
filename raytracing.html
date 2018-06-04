@@ -22,7 +22,7 @@
 
     <!-- Together JS. -->
     <script src="https://togetherjs.com/togetherjs-min.js"></script>
-    
+
     <!-- CSS -->
     <link rel="stylesheet" href="stylesheet.css">
 
@@ -42,27 +42,28 @@
   <body>
     <button onclick="TogetherJS(this); return false;">Start TogetherJS</button>
     <p>This is the home page for the 5J Web application. </p>
-    <b>View:</b>
+    <b>||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||View:</b>
     <select id="comboSelection">
       <option value="FDG_S">FDG with Simple Parser</option>
       <option value="FDG_J">FDG with JSON Parsing</option>
-      <option value="AST">AST</option>
-      <option value="PATHTRACING" selected>Path Tracing</option>
+      <option value="AST" selected>AST</option>
+      <option value="PATHTRACING">Path Tracing</option>
     </select>
 
     <b>Parser:</b>
     <select id="parser">
       <option value="SIMPLE">SimpleParse</option>
+      <option value="YAML">YAML</option>
       <option value="JSON">JSON</option>
       <option value="AST">AST</option>
-      <option value="PATHTRACING" selected>Coordinate</option>
+      <option value="PATHTRACING">Coordinate</option>
     </select>
 
     <b>Interpreter:</b>
     <select id="renderer">
       <option value="FDG">FDG</option>
       <option value="AST">AST</option>
-      <option value="PATHTRACING" selected>Pathtracing</option>
+      <option value="PATHTRACING">Pathtracing</option>
     </select>
 
     <div id="codeeditor"></div>

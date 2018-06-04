@@ -1,3 +1,14 @@
+var pathtracingString = "sphere 0 0 0 2\nsphere -5 5 0 1.5\nsphere 5 5 0 1.5\ncube -5 -5 0 1\ncube -2.5 -6 0 1\ncube 0 -7 0 1\ncube 2.5 -6 0 1\ncube 5 -5 0 1"
+
+module.exports = {
+  parse : parseCoordinates,
+  render : renderPathTracing,
+  parseString :pathtracingString,
+}
+
+
+
+
 function parseCoordinates(text){
   var lines = text.split("\n")
   var objects = []
@@ -1351,10 +1362,6 @@ if(gl) {
   error.innerHTML = 'Your browser does not support WebGL.<br>Please see <a href="http://www.khronos.org/webgl/wiki/Getting_a_WebGL_Implementation">Getting a WebGL Implementation</a>.';
 }
 
-module.exports = {
-  parse : parseCoordinates,
-  render : renderPathTracing,
-}
 
 
 // <br><button onclick="javascript:ui.setObjects(makeSphereColumn())">Sphere Column</button>
