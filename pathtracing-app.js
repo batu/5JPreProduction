@@ -1,7 +1,7 @@
-
 var fdg = require('./ParsersAndRenderers/fdg.js');
 var ast = require('./ParsersAndRenderers/ast.js');
 var yaml = require('./ParsersAndRenderers/yaml.js');
+var java = require('./ParsersAndRenderers/java.js');
 var pathtracing = require('./ParsersAndRenderers/pathtracing.js');
 var intermediate = require('./ParsersAndRenderers/intermediate.js');
 
@@ -44,7 +44,6 @@ Start();
 
 function Start(){
 	if(location.hash){
-		console.log("I AM HERE!")
 		updateFromHashFragment();
 	}else{
 		comboUpdate();
@@ -55,6 +54,7 @@ function parseAndRender(){
 	code_text = myCodeMirror.getValue();
 	var parseError = false;
 	var graph;
+	//java.parse(code_text)
 
 	// console.log(yaml.parse(code_text))
 	d3.select("#drawArea")
