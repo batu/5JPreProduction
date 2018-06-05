@@ -1,27 +1,26 @@
 var fdg = require('./ParsersAndRenderers/fdg.js');
 var ast = require('./ParsersAndRenderers/ast.js');
+var yaml = require('./ParsersAndRenderers/yaml.js');
+var java = require('./ParsersAndRenderers/java.js');
+var pathtracing = require('./ParsersAndRenderers/pathtracing.js');
+var intermediate = require('./ParsersAndRenderers/intermediate.js');
 
-var simpleParseString = "hat_1 = brown\nhat_2 = brown\nhead_1 = teal\nhead_2 = teal\nchin = teal\n\nhat_1 -> hat_2\nhead_1 -> chin\nchin -> head_2\nhead_1 -> hat_1\nhat_2 -> head_2\n\nbody = blue\nbelly = blue\narm_l = blue\narm_r = blue\nhand_l = teal\nhand_r = teal\n\nchin -> body\nbody -> belly\nbody -> arm_l\nbody -> arm_r\narm_r -> hand_r\narm_l -> hand_l\n\npelvis = red\nleg_r = red\nleg_l = red\nfoot_l = teal\nfoot_r = teal\n\nbelly -> pelvis\npelvis -> leg_r\npelvis -> leg_l\nleg_l -> foot_l\nleg_r -> foot_r\n"
-
-var JSONParseString = '{\n	  "nodes": [\n	    {"id": "Head_1",   "color": "brown"},\n	    {"id": "Head_2",      "color": "brown"},\n	    {"id": "Head_3",  "color": "brown"},\n	    {"id": "Face_1", "color": "teal"},\n	    {"id": "Face_2", "color": "teal"},\n	    {"id": "Chin", "color": "teal"},\n\n	    {"id": "Body", "color": "blue"},\n	    {"id": "Belly", "color": "blue"},\n	    {"id": "Arm_L", "color": "blue"},\n	    {"id": "Arm_R", "color": "blue"},\n	    {"id": "Hand_L", "color": "teal"},\n	    {"id": "Hand_R", "color": "teal"},\n\n	    {"id": "Pelvis", "color": "red"},\n	    {"id": "Leg_R", "color": "red"},\n	    {"id": "Leg_L", "color": "red"},\n	    {"id": "Foot_R", "color": "teal"},\n	    {"id": "Foot_L", "color": "teal"}\n	 ],\n	  "links": [\n	    {"source": "Head_1", "target": "Head_2", "value": 10},\n	    {"source": "Head_2", "target": "Head_3", "value": 10},\n	    {"source": "Face_1", "target": "Head_1", "value": 10},\n	    {"source": "Face_2", "target": "Head_3", "value": 10},\n	    {"source": "Face_2", "target": "Chin", "value": 10},\n	    {"source": "Face_1", "target": "Chin", "value": 10},\n\n	    {"source": "Chin", "target": "Body", "value": 10},\n	    {"source": "Body", "target": "Belly", "value": 10},\n	    {"source": "Body", "target": "Arm_L", "value": 10},\n	    {"source": "Body", "target": "Arm_R", "value": 10},\n	    {"source": "Hand_R", "target": "Arm_R", "value": 10},\n	    {"source": "Hand_L", "target": "Arm_L", "value": 10},\n\n	    {"source": "Belly", "target": "Pelvis", "value": 10},\n	    {"source": "Pelvis", "target": "Leg_L", "value": 10},\n	    {"source": "Pelvis", "target": "Leg_R", "value": 10},\n	    {"source": "Foot_R", "target": "Leg_R", "value": 10},\n	    {"source": "Foot_L", "target": "Leg_L", "value": 10}\n	  ]\n	}\n'
-
-console.log("Who whatches the wathitfy?")
-
-var ASTstring = 'var x = 5\nif(x < 10){\n	x += 1\n    var b = "My Value"\n}\ntest(b)\n'
 // Code mirror part
-var placeHolderText = JSONParseString;
+var placeHolderText = pathtracing.pareString;
 
 var isJSON = false;
 
 var isAST = false;
-var activeParseFunction = fdg.parseSimpleFDG;
-var activeRenderFunction = fdg.renderFDG;
-var activeErrorFunction = fdg.drawErrorFDG;
-
+var activeParseFunction;
+var activeRenderFunction;
+var activeErrorFunction;
 
 var parentElement = parentElement = document.getElementById('drawArea');
 var dimensions = [parentElement.clientWidth, parentElement.clientHeight];
 
+d3.select('#parser').on('change',parserUpdate);
+d3.select('#renderer').on('change',rendererUpdate);
+d3.select('#comboSelection').on('change',comboUpdate);
 
 
 if (localStorage['FDGtext'] !== undefined){
@@ -34,12 +33,53 @@ var myCodeMirror = CodeMirror(document.getElementById("codeeditor"), {
 	lineNumbers: true,
 });
 
-parseAndRender();
+
 
 myCodeMirror.on("change", function(){
 	localStorage['FDGtext'] = myCodeMirror.getValue();
 	parseAndRender();
 });
+
+Start();
+
+function Start(){
+	if(location.hash){
+		updateFromHashFragment();
+	}else{
+		comboUpdate();
+	}
+}
+
+function parseAndRender(){
+	code_text = myCodeMirror.getValue();
+	var parseError = false;
+	var graph;
+	//java.parse(code_text)
+
+	// console.log(yaml.parse(code_text))
+	d3.select("#drawArea")
+		.select("svg")
+		.remove()
+	try {
+		graph = Parse(activeParseFunction, code_text)
+	} catch (e) {
+		parseError = true;
+		graph = {'errorMessage': e.message, 'errorObject': e};
+	}
+
+	try{
+		if (!parseError && graph !== undefined && graph.length != 0) {
+			Render(activeRenderFunction, graph)
+		}else{
+				console.log(graph["errorMessage"])
+				RenderError(activeErrorFunction, graph);
+		}
+	}
+	catch(e){
+		drawDefaultError(e);
+	}
+	updateHashFragment();
+}
 
 
 function Parse(parseFunction, text){
@@ -55,81 +95,126 @@ function RenderError(errorFunction, graph){
 	errorFunction(graph);
 }
 
+function comboUpdate(){
 
-d3.select('#toggleParserButton').on('click', function(){
-	isJSON = !isJSON;
-	console.log("clicked")
-	if(isJSON){
-		var elem = document.getElementById('toggleParserButton');
-		elem.innerHTML = "switch to SimpleParse"
-		localStorage['FDGtext'] = JSONParseString;
-		myCodeMirror.setValue(JSONParseString);
-		activeParseFunction = fdg.parseJSONFDG;
-	}else{
-		var elem = document.getElementById('toggleParserButton');
-		elem.innerHTML = "switch to JSON parsing"
-		localStorage['FDGtext'] = simpleParseString;
-		myCodeMirror.setValue(simpleParseString);
-		activeParseFunction = fdg.parseSimpleFDG;
-	}
-	parseAndRender();
-});
+		var comboSelectionValue = d3.select('#comboSelection').node().value;
+		switch(comboSelectionValue) {
+    case "FDG_S":
+				changeDropDownValue("parser", "SIMPLE");
+				changeDropDownValue("renderer", "FDG");
+				break;
+    case "FDG_J":
+				changeDropDownValue("parser", "JSON");
+				changeDropDownValue("renderer", "FDG");
+        break;
+		case "AST":
+				changeDropDownValue("parser", "AST");
+				changeDropDownValue("renderer", "AST");
+				break;
+		case "PATHTRACING":
+				changeDropDownValue("parser", "PATHTRACING");
+				changeDropDownValue("renderer", "PATHTRACING");
+				break;
+			}
+		rendererUpdate();
+		parserUpdate();
+		parseAndRender();
+}
 
-d3.select('#toggleParseRenderGroup').on('click', function(){
-	isAST = !isAST;
+function parserUpdate(){
+		var parserValue = d3.select('#parser').node().value;
+		console.log(parserValue)
+		switch(parserValue) {
+    case "SIMPLE":
+        activeParseFunction = fdg.parseSimple;
+				localStorage['FDGtext'] = fdg.parseStringSimple;
+				myCodeMirror.setValue(fdg.parseStringSimple);
+				break;
+		case "YAML":
+	      activeParseFunction = yaml.parse;
+				localStorage['FDGtext'] = yaml.parseString;
+				myCodeMirror.setValue(yaml.parseString);
+				break;
+    case "JSON":
+        activeParseFunction = fdg.parseJSON;
+				localStorage['FDGtext'] = fdg.parseStringJSON;
+				myCodeMirror.setValue(fdg.parseStringJSON);
+        break;
+		case "AST":
+				activeParseFunction = ast.parse;
+				localStorage['FDGtext'] = ast.parseString;
+				myCodeMirror.setValue(ast.parseString);
+				break;
+		case "PATHTRACING":
+				activeParseFunction = pathtracing.parse;
+				localStorage['FDGtext'] = pathtracing.parseString;
+				myCodeMirror.setValue(pathtracing.parseString);
+				break;
+			}
+		parseAndRender();
+}
 
-	var elem = document.getElementById('toggleParseRenderGroup');
-	if(isAST){
-		elem.innerHTML = "switch to FDG"
-		activeParseFunction = ast.parseAST;
-		activeRenderFunction = ast.renderAST;
-		activeErrorFunction = ast.drawErrorAST;
-		localStorage['FDGtext'] = ASTstring;
-		myCodeMirror.setValue(ASTstring);
-		document.getElementById('toggleParserButton').disabled = true;
-	}else{
-		elem.innerHTML = "switch to AST"
-		document.getElementById('toggleParserButton').disabled = false;
-		if(isJSON){
-			localStorage['FDGtext'] = JSONParseString;
-			myCodeMirror.setValue(JSONParseString);
-			activeParseFunction = fdg.parseJSONFDG;
-		}else{
-			localStorage['FDGtext'] = JSONParseString;
-			myCodeMirror.setValue(JSONParseString);
-			activeParseFunction = fdg.parseJSONFDG;
-		}
-		activeRenderFunction = fdg.renderFDG;
-		activeErrorFunction = fdg.drawErrorFDG;
-	}
+function rendererUpdate(){
+		var rendererValue = d3.select('#renderer').node().value;
 
-	parseAndRender();
-});
+		switch(rendererValue) {
+    case "FDG": // FDG
+        activeRenderFunction = fdg.render;
+				activeErrorFunction = fdg.catchError;
+				enableD3View();
+        break;
+    case "AST": // AST
+        activeRenderFunction = ast.render;
+				activeErrorFunction = ast.catchError;
+				enableD3View();
+        break;
+		case "PATHTRACING": // Pathtracing
+				activeRenderFunction = pathtracing.render;
+				enablePathtracingView();
+				break;
+			}
+		parseAndRender();
+}
 
-function parseAndRender(){
-	code_text = myCodeMirror.getValue();
-	var parseError = false;
-	var graph = {"nodes":[],
-	"links":[]};
+function enablePathtracingView(){
+		d3.select('#main').style("display", "block");
+		d3.select('#drawArea').style("display", "none");
+}
 
-	try {
-		var graph = Parse(activeParseFunction, code_text)
-	} catch (e) {
-		parseError = true;
-		graph = {'errorMessage': e.message, 'errorObject': e};
-	}
-
-	// https://javascriptstore.com/2017/10/15/visualize-ast-javascript/
-	// declares a tree layout and assigns the size
-	if (!parseError && graph.length != 0) {
-		Render(activeRenderFunction, graph)
-	}else{
-		console.log(graph["errorMessage"])
-		RenderError(activeErrorFunction, graph);
-	}
+function enableD3View(){
+	d3.select('#main').style("display", "none");
+	d3.select('#drawArea').style("display", "block");
 }
 
 
+function updateHashFragment(){
+	var hash_string = ""
+	var rendererValue = d3.select('#renderer').node().value;
+	var parserValue = d3.select('#parser').node().value;
+
+	hash_string += parserValue;
+	hash_string += "_"
+	hash_string += rendererValue;
+
+	location.hash = hash_string;
+}
+
+
+function updateFromHashFragment(){
+		var hash_string = location.hash;
+		var splitted = hash_string.split("_")
+		var parser_id = splitted[0].slice(1)
+		var renderer_id = splitted[1]
+		console.log(parser_id)
+		console.log(renderer_id)
+
+		changeDropDownValue("parser", parser_id);
+		changeDropDownValue("renderer", renderer_id);
+
+		rendererUpdate();
+		parserUpdate();
+		parseAndRender();
+}
 d3.select('#saveButton').on('click', function(){
 	var svg = d3.select('svg')
 	var svgString = getSVGString(svg.node());
@@ -141,105 +226,64 @@ d3.select('#saveButton').on('click', function(){
 });
 
 
-// Below are the functions that handle actual exporting:
-// getSVGString ( svgNode ) and svgString2Image( svgString, width, height, format, callback )
-function getSVGString( svgNode ) {
-	svgNode.setAttribute('xlink', 'http://www.w3.org/1999/xlink');
-	var cssStyleText = getCSSStyles( svgNode );
-	appendCSS( cssStyleText, svgNode );
-
-	var serializer = new XMLSerializer();
-	var svgString = serializer.serializeToString(svgNode);
-	svgString = svgString.replace(/(\w+)?:?xlink=/g, 'xmlns:xlink='); // Fix root xlink without namespace
-	svgString = svgString.replace(/NS\d+:href/g, 'xlink:href'); // Safari NS namespace fix
-
-	return svgString;
-
-	function getCSSStyles( parentElement ) {
-		var selectorTextArr = [];
-
-		// Add Parent element Id and Classes to the list
-		selectorTextArr.push( '#'+parentElement.id );
-		for (var c = 0; c < parentElement.classList.length; c++)
-		if ( !contains('.'+parentElement.classList[c], selectorTextArr) )
-		selectorTextArr.push( '.'+parentElement.classList[c] );
-
-		// Add Children element Ids and Classes to the list
-		var nodes = parentElement.getElementsByTagName("*");
-		for (var i = 0; i < nodes.length; i++) {
-			var id = nodes[i].id;
-			if ( !contains('#'+id, selectorTextArr) )
-			selectorTextArr.push( '#'+id );
-
-			var classes = nodes[i].classList;
-			for (var c = 0; c < classes.length; c++)
-			if ( !contains('.'+classes[c], selectorTextArr) )
-			selectorTextArr.push( '.'+classes[c] );
+function changeDropDownValue(element_id, value){
+	var ddl = document.getElementById(element_id);
+	var opts = ddl.options.length;
+	for (var i=0; i<opts; i++){
+	    if (ddl.options[i].value == value){
+	        ddl.options[i].selected = true;
+	        break;
+	    }
 		}
-
-		// Extract CSS Rules
-		var extractedCSSText = "";
-		for (var i = 0; i < document.styleSheets.length; i++) {
-			var s = document.styleSheets[i];
-
-			try {
-				if(!s.cssRules) continue;
-			} catch( e ) {
-				if(e.name !== 'SecurityError') throw e; // for Firefox
-				continue;
-			}
-
-			var cssRules = s.cssRules;
-			for (var r = 0; r < cssRules.length; r++) {
-				if ( contains( cssRules[r].selectorText, selectorTextArr ) )
-				extractedCSSText += cssRules[r].cssText;
-			}
-		}
-
-
-		return extractedCSSText;
-
-		function contains(str,arr) {
-			return arr.indexOf( str ) === -1 ? false : true;
-		}
-
-	}
-
-	function appendCSS( cssText, element ) {
-		var styleElement = document.createElement("style");
-		styleElement.setAttribute("type","text/css");
-		styleElement.innerHTML = cssText;
-		var refNode = element.hasChildNodes() ? element.children[0] : null;
-		element.insertBefore( styleElement, refNode );
-	}
 }
 
 
-function svgString2Image( svgString, width, height, format, callback ) {
-	var format = format ? format : 'png';
-
-	var imgsrc = 'data:image/svg+xml;base64,'+ btoa( unescape( encodeURIComponent( svgString ) ) ); // Convert SVG string to data URL
-
-	var canvas = document.createElement("canvas");
-	var context = canvas.getContext("2d");
-
-	canvas.width = width;
-	canvas.height = height;
-
-	var image = new Image();
-	image.onload = function() {
-		//context.clearRect ( 0, 0, width, height );
-		context.fillStyle = "white";
-		context.fillRect(0, 0, width, height);
-		context.drawImage(image, 0, 0, width, height);
-
-		canvas.toBlob( function(blob) {
-			var filesize = Math.round( blob.length/1024 ) + ' KB';
-			if ( callback ) callback( blob, filesize );
-		});
 
 
-	};
+function drawDefaultError(error){
+	var fill = '#3AA';
+	var stroke = '#FFF';
+	var text = '#FFF';
+	var line = '#CCC';
+	var margin = 30;
+	var fontSize = 18;
+	var nodeFont = { 'font-size': fontSize,
+									 'font-family': 'Arial, Helvetica, sans-serif',
+									 'fill': text };
 
-	image.src = imgsrc;
+	var container = "#drawArea"
+
+	var	message = "There is a mismatch between the Parser and Interpreter!"
+
+	d3.select(container)
+		.select("svg")
+		.remove()
+
+	var svg = d3.select(container).append("svg");
+
+	var svg_witdh = 1000
+	var svg_height = 1000
+
+	svg.attr("width", svg_witdh);
+	svg.attr("height", svg_height);
+
+	d3.select('svg')
+		.append('rect')
+			.classed('node', true)
+			.attr('x', svg_witdh / 2 - 300)
+			.attr('y', svg_height / 4 - 100)
+			.attr('height', 200)
+			.attr('width', 600)
+			.attr("fill", "#3AA")
+
+	d3.select('svg')
+		.append("text")
+			.attr("x", svg_witdh / 2)
+			.attr("y", svg_height / 4)
+			.attr("text-anchor", "middle")
+			.text(function(text) {return message})
+			.attr("font-family", nodeFont["font-family"])
+			.attr('fill', nodeFont["fill"])
+			.attr("font-size", nodeFont["font-sis"])
+
 }

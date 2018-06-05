@@ -8,7 +8,7 @@ module.exports = {
 
 
 
-
+// Object Type X Y Z radius
 function parseCoordinates(text){
   var lines = text.split("\n")
   var objects = []

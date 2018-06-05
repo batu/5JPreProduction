@@ -125,17 +125,10 @@ function renderFDG(graph){
 
   var link = svg.append("g")
       .attr("class", "links")
-    .selectAll("line")
-    .data(graph.links)
-    .enter().append("line")
+	    .selectAll("line")
+	    .data(graph.links)
+	    .enter().append("line")
       .attr("stroke-width", function(d) { return Math.sqrt(d.value); });
-
-var link_text = svg.append("g")
-    .attr("class", "link-text")
-  	.selectAll("text")
-  	.data(graph.links)
-  	.enter().append("text")
-    .text(function(d) { return d.label; })
 
   var node = svg.append("g")
       .attr("class", "nodes")
@@ -150,6 +143,13 @@ var link_text = svg.append("g")
           .on("start", dragstarted)
           .on("drag", dragged)
           .on("end", dragended));
+
+	var	textElements = svg.append('g')
+		  .selectAll('text')
+		  .data(graph.links)
+		  .enter().append('text')
+	    .text(d => d.label)
+	    .attr('font-size', 15)
 
   node.append("title")
       .text(function(d) { return d.id; });
@@ -193,5 +193,10 @@ try{
     node
         .attr("cx", function(d) { return d.x; })
         .attr("cy", function(d) { return d.y; });
+
+		textElements
+    .attr("x", function(d) { console.log(d);
+			return (d.source.x + d.target.x) / 2 })
+    .attr("y", function(d) {return (d.source.y + d.target.y) / 2 })
   }
 }
