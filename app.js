@@ -253,6 +253,7 @@ function drawDefaultError(error){
 
 	var container = "#drawArea"
 
+	console.error(error);
 	var	message = "There is a mismatch between the Parser and Interpreter!"
 
 	d3.select(container)

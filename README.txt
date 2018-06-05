@@ -9,15 +9,16 @@ Each implementation needs to export three functions:
 2) Rendering Function
 3) Error Function
 
-# Example code from the AST visualz code.
+# Example code from the AST visualize code.
 module.exports = {
-	parseAST : parseAST,
+	parse : parseAST,
+	render : renderAST
 	drawErrorAST : drawErrorAST,
-	renderAST : renderAST
+	parseString : myPlaceHolderString,
 }
 
 
-In the main app.js file which renderer / parser / errorfuntion combination is going to be used is decided by the following three variables:
+In the main app.js file which renderer / parser / errorfuntion  combination is going to be used is decided by the following three variables:
 
 var activeParseFunction = fdg.parseSimpleFDG;
 var activeRenderFunction = fdg.renderFDG;
@@ -37,7 +38,4 @@ browserify app.js  ParsersAndRenderers/yourparser.js ParsersAndRenderers/otherpa
 ## Watchify ##
 I recommend using Watchify to automatically call browserify whenever a chance is made.
 
-watchify pathtracing-app.js ParsersAndRenderers/fdg.js ParsersAndRenderers/ast.js raytracing/glUtils.js raytracing/sylvester.src.js  ParsersAndRenderers/pathtracing.js ParsersAndRenderers/intermediate.js ParsersAndRenderers/java.js -o pathtracing-bundle.js
-
-
-ParsersAndRenderers/*.js should work in watchify but needs testing.
+watchify app.js ParsersAndRenderers/*.js -o bundle.js
