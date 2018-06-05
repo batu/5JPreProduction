@@ -149,7 +149,7 @@ function renderFDG(graph){
 		  .data(graph.links)
 		  .enter().append('text')
 	    .text(d => d.label)
-	    .attr('font-size', 15)
+			.attr('class', "label-text")
 
   node.append("title")
       .text(function(d) { return d.id; });

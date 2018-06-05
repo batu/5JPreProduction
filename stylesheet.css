@@ -12,3 +12,9 @@ body{
   stroke: #fff;
   stroke-width: 1.5px;
 }
+
+.label-text {
+	font-size: 20;
+  fill: #333;
+	font-family: sans-serif;
+}
